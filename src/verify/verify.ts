@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { type Conn, type DbTarget, openConn } from '../db/conn.js';
 import { makeShadows } from '../db/shadow.js';
-import { isNoise, isVolatile, kindOf, topLevel } from '../sql/classify.js';
+import { isIntrospection, isNoise, isVolatile, kindOf, topLevel } from '../sql/classify.js';
 import { fingerprint } from '../sql/normalize.js';
 import { bootstrapRatio, median, mulberry32, percentile, type RatioCI } from '../stats.js';
 import { decodeParams, hasUnverifiable } from '../trace/params.js';
@@ -116,6 +116,10 @@ export async function verify(o: VerifyOptions): Promise<VerifyResult> {
     }
     if (isVolatile(r.sql)) {
       unv('volatile-function');
+      continue;
+    }
+    if (isIntrospection(r.sql)) {
+      unv('schema-introspection'); // a migration changes these results by definition
       continue;
     }
     const tl = topLevel(r.sql);

@@ -1,21 +1,53 @@
 {
   "name": "sql-anything",
   "version": "0.1.0-dev",
-  "description": "Find the slow 5% of your SQL, let an agent fix it, and replay-verify the fix before you trust it.",
+  "description": "Find the slow 5% of your SQL, let an agent fix it, and replay-verify the fix before you trust it. N+1, missing indexes, seq scans. pg, SQLite, Prisma 7, Drizzle, Knex, Sequelize.",
+  "license": "MIT",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Guten-Morgen1302/sql-anything.git"
+  },
+  "homepage": "https://github.com/Guten-Morgen1302/sql-anything#readme",
+  "bugs": {
+    "url": "https://github.com/Guten-Morgen1302/sql-anything/issues"
+  },
+  "keywords": [
+    "sql",
+    "n+1",
+    "postgres",
+    "postgresql",
+    "sqlite",
+    "performance",
+    "query-optimization",
+    "index",
+    "explain",
+    "orm",
+    "prisma",
+    "drizzle",
+    "sequelize",
+    "knex",
+    "mcp",
+    "claude-code",
+    "ai-agent",
+    "profiler"
+  ],
   "bin": {
     "sql-anything": "dist/src/cli.js"
   },
   "files": [
     "dist/src",
     "skills",
-    "README.md"
+    "examples",
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "test:unit": "node --test \"dist/test/unit/*.test.js\"",
     "test:integration": "node --test --test-concurrency=1 --test-timeout=600000 \"dist/test/integration/*.test.js\"",
     "test": "npm run build && npm run test:unit && npm run test:integration",
@@ -27,11 +59,14 @@
     "zod": "^4.6.7"
   },
   "devDependencies": {
+    "@prisma/adapter-pg": "^7.10.1",
+    "@prisma/client": "^7.10.1",
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.11.0",
     "better-sqlite3": "^12.0.0",
     "embedded-postgres": "^18.0.0-beta.1",
+    "prisma": "^7.10.1",
     "typescript": "^5.9.0"
   }
 }

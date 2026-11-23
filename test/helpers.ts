@@ -128,7 +128,12 @@ export async function startPg(): Promise<{ baseUrl: string; createDb(name: strin
     },
     async stop() {
       await pg.stop();
-      fs.rmSync(dir, { recursive: true, force: true });
+      // Windows can hold the data directory for a moment after postgres exits (EBUSY): retry, and never fail a test over cleanup
+      try {
+        fs.rmSync(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 300 });
+      } catch {
+        /* leftover temp dir is harmless */
+      }
     },
   };
 }

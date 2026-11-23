@@ -85,3 +85,13 @@ describe('topLevel ORDER BY / LIMIT', () => {
     assert.deepEqual(topLevel('select * from t limit 5'), { orderBy: false, limit: true });
   });
 });
+
+describe('schema introspection', () => {
+  it('flags catalog and ORM start-up queries, not application queries', async () => {
+    const { isIntrospection } = await import('../../src/sql/classify.js');
+    for (const s of ['select distinct tc.constraint_name from information_schema.table_constraints tc', 'SELECT * FROM pg_catalog.pg_indexes', 'select oid from pg_class where relname = $1', "select name from sqlite_master where type = 'index'", 'select * from pragma_table_info(?)', 'SELECT pg_get_indexdef(i.indexrelid) FROM pg_index i']) {
+      assert.equal(isIntrospection(s), true, s);
+    }
+    for (const s of ['select * from orders where status = $1', 'select name from products', 'select count(*) from users']) assert.equal(isIntrospection(s), false, s);
+  });
+});

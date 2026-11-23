@@ -17,17 +17,18 @@ const USAGE = `sql-anything: find the slow SQL, fix it, and replay-verify the fi
 
   sql-anything go     --db <db> [--agent claude|none] [--hit <url>...] [--duration 20s] [--max-fixes 3] -- <app command>
   sql-anything scan   [--db <sqlite-file|postgres-url>] [--duration 20s] [--hit <url>...] [--trace <dir>] -- <app command>
-  sql-anything fix    <F1> --db <db> [--trace <dir>] [--agent claude|none | --agent-cmd "<cmd>"] [--no-index] [--max-attempts 3]
+  sql-anything fix    <F1> --db <db> [--trace <dir>] [--agent claude|none | --agent-cmd "<cmd>"] [--no-index] [--migration idx.sql] [--max-attempts 3] [--max-seconds 90]
                       [--run "<server cmd>" --check-url <url> | --check-cmd "<cmd>"]
   sql-anything verify --db <db> [--trace <dir>] [--migration file.sql] [--rewrite rewrites.json] [--target <F1|fingerprint>]
   sql-anything verify --db <db> --baseline-dir <dir> --patched-dir <dir> (--check-url <url> --run "<server cmd>" | --check-cmd "<cmd>")
   sql-anything bench  (same flags as verify; timing only, no pass/fail)
   sql-anything report [--trace <dir>] [--fix F1...] [--out <dir>] [--label "synthetic demo"]
+  sql-anything demo   [--out dir] [--no-open]   zero-config showcase on a synthetic SQLite shop (about 15 s)
   sql-anything mcp    (stdio MCP server: scan, verify, verify_workload, fix, report)
 
 Exit codes: 0 ok / verified win, 2 patch rejected by the gate, 3 usage or environment error, 4 nothing captured or result unverifiable.
 Kill switch: SQL_ANYTHING_DISABLE=1 makes the capture hook do nothing and refuses go/fix.
-Coming next: demo.`;
+`;
 
 const num = (s?: string) => (s === undefined ? undefined : Number(s));
 const err = (s: string) => console.error(s);
@@ -116,6 +117,7 @@ async function cmdVerify(argv: string[], bench: boolean): Promise<number> {
       'min-speedup': { type: 'string' },
       'max-regress': { type: 'string' },
       'write-budget': { type: 'string' },
+      'max-seconds': { type: 'string' },
       seed: { type: 'string' },
       json: { type: 'boolean' },
       'allow-remote-shadow': { type: 'boolean' },
@@ -162,6 +164,7 @@ async function cmdVerify(argv: string[], bench: boolean): Promise<number> {
     minSpeedup: num(values['min-speedup']),
     maxRegress: num(values['max-regress']),
     writeBudget: num(values['write-budget']),
+    maxSeconds: num(values['max-seconds']),
     seed: num(values.seed),
     allowRemote: !!values['allow-remote-shadow'],
     gate: !bench,
@@ -182,6 +185,7 @@ const fixOptions = {
   agent: { type: 'string' },
   'agent-cmd': { type: 'string' },
   'no-index': { type: 'boolean' },
+  migration: { type: 'string' },
   'max-attempts': { type: 'string' },
   'agent-timeout': { type: 'string' },
   run: { type: 'string' },
@@ -190,6 +194,7 @@ const fixOptions = {
   reps: { type: 'string' },
   project: { type: 'string' },
   'min-speedup': { type: 'string' },
+  'max-seconds': { type: 'string' },
   'allow-remote-shadow': { type: 'boolean' },
   seed: { type: 'string' },
   json: { type: 'boolean' },
@@ -214,10 +219,12 @@ async function cmdFix(argv: string[]): Promise<number> {
     projectDir: values.project ? path.resolve(values.project) : undefined,
     agent,
     deterministic: !values['no-index'],
+    userMigration: values.migration ? fs.readFileSync(values.migration, 'utf8') : undefined,
     maxAttempts: num(values['max-attempts']),
     agentTimeoutMs: values['agent-timeout'] ? Number(values['agent-timeout']) * 1000 : undefined,
     check: checkOpts(values),
     minSpeedup: num(values['min-speedup']),
+    tuning: values['max-seconds'] ? { maxSeconds: Number(values['max-seconds']) } : undefined,
     allowRemote: !!values['allow-remote-shadow'],
     seed: num(values.seed),
     log: err,
@@ -254,6 +261,7 @@ async function cmdGo(argv: string[]): Promise<number> {
     agentTimeoutMs: values['agent-timeout'] ? Number(values['agent-timeout']) * 1000 : undefined,
     check: checkOpts(values),
     minSpeedup: num(values['min-speedup']),
+    tuning: values['max-seconds'] ? { maxSeconds: Number(values['max-seconds']) } : undefined,
     allowRemote: !!values['allow-remote-shadow'],
     label: values.label,
     seed: num(values.seed),
@@ -292,6 +300,18 @@ async function cmdReport(argv: string[]): Promise<number> {
   return 0;
 }
 
+async function cmdDemo(argv: string[]): Promise<number> {
+  const { values } = parseArgs({ args: argv, options: { out: { type: 'string' }, 'no-open': { type: 'boolean' }, keep: { type: 'boolean' } } });
+  const { demo } = await import('./demo.js');
+  console.log('sql-anything demo: synthetic SQLite shop, no Docker, no network, no API key');
+  const r = await demo({ out: values.out, open: !values['no-open'], keep: !!values.keep, log: (s) => console.log(s) });
+  for (const n of r.notes) console.log(`
+note: ${n}`);
+  console.log(`
+done in ${r.seconds.toFixed(1)}s (exit ${r.exitCode})`);
+  return r.exitCode;
+}
+
 async function main(): Promise<number> {
   muteSqliteWarning();
   const [cmd, ...rest] = process.argv.slice(2);
@@ -315,8 +335,7 @@ async function main(): Promise<number> {
         return await new Promise<number>(() => {}); // the stdio server runs until the client closes the pipe
       }
       case 'demo':
-        err('"demo" is not implemented yet.');
-        return 3;
+        return await cmdDemo(rest);
       case undefined:
       case '-h':
       case '--help':

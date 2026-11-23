@@ -49,6 +49,8 @@ export interface ScanOptions {
   duration?: string;
   hits?: string[];
   hitRepeat?: number;
+  /** extra environment for the app process, e.g. PORT and the database path */
+  env?: Record<string, string>;
   explain?: boolean;
   explainTop?: number;
   nPlusOneMin?: number;
@@ -79,6 +81,7 @@ export async function runScan(o: ScanOptions): Promise<ScanOutcome> {
       durationMs: o.duration ? parseDuration(o.duration) : undefined,
       hits: o.hits,
       hitRepeat: o.hitRepeat ?? 1,
+      env: o.env,
       quiet: true,
     });
     if (cap.exitCode && !cap.timedOut && !o.hits?.length) log(`the app exited with code ${cap.exitCode}`);

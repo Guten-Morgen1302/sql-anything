@@ -8,7 +8,7 @@ import { parseTarget, type DbTarget } from '../db/conn.js';
 import type { Finding } from '../scan/analyze.js';
 import { readTrace } from '../trace/read.js';
 import { check, type CheckOptions, type CheckResult } from '../verify/check.js';
-import { verify, type VerifyResult } from '../verify/verify.js';
+import { verify, type VerifyOptions, type VerifyResult } from '../verify/verify.js';
 import { indexCandidates } from './candidates.js';
 import type { Attempt, FixRecord, FixResult } from './types.js';
 
@@ -21,10 +21,14 @@ export interface FixOptions {
   agent?: AgentSpec | null;
   /** try deterministic CREATE INDEX candidates first (default true) */
   deterministic?: boolean;
+  /** a hand-written migration to put through the gate instead of the generated candidates (down is derived for CREATE INDEX) */
+  userMigration?: string;
   maxAttempts?: number;
   /** how to measure a code change end to end (needed to accept agent edits to application code) */
   check?: Partial<Pick<CheckOptions, 'runCmd' | 'checkUrl' | 'checkCmd' | 'reps'>>;
   minSpeedup?: number;
+  /** sampling knobs passed to every verify call (samples, rounds, maxSeconds), e.g. for a fast demo */
+  tuning?: Partial<Pick<VerifyOptions, 'samples' | 'rounds' | 'maxSeconds' | 'minSamples'>>;
   allowRemote?: boolean;
   agentTimeoutMs?: number;
   seed?: number;
@@ -52,7 +56,7 @@ function callsiteText(callsite: string | null, projectDir: string): string {
   return `Issued from: ${file} (line ${m[2]})`;
 }
 
-export function buildPrompt(f: Finding, projectDir: string, previous: string[]): string {
+export function buildPrompt(f: Finding, projectDir: string, previous: string[], siblings: Finding[] = []): string {
   return [
     'You are fixing ONE slow-SQL finding in this repository. Work only inside the current directory.',
     '',
@@ -61,6 +65,13 @@ export function buildPrompt(f: Finding, projectDir: string, previous: string[]):
     `Fingerprint: ${f.fingerprint}`,
     f.callsite ? `Issued from: ${rel(f.callsite.replace(/:\d+$/, '').replace(/:\d+$/, ''), projectDir) ?? f.callsite} (line ${f.callsite.split(':').slice(-2)[0]})` : 'Call site: unknown, search the code for this statement.',
     f.plan ? `Query plan: ${f.plan.summary}` : '',
+    siblings.length
+      ? [
+          '',
+          'Other N+1 loops were found in the same requests. The speed gate measures the whole endpoint, so a fix for one loop alone is usually too small to pass. Fix them in the same change:',
+          ...siblings.map((s) => `- ${s.id}: ${s.n1?.medianPerRequest ?? '?'} lookups per request at ${callsiteText(s.callsite, projectDir).replace('Issued from: ', '')}: ${s.sql.slice(0, 140)}`),
+        ].join('\n')
+      : '',
     '',
     'What to do:',
     '- For an N+1: replace the per-row lookups with eager loading or ONE batched query, keeping the output byte-for-byte identical.',
@@ -110,8 +121,8 @@ function write(dir: string, name: string, content: string) {
 }
 
 /** Never recurse through a link: the node_modules junction points at the user's real dependencies. */
-function removeWorktree(top: string, wt: string, link: string | null) {
-  if (link) {
+function removeWorktree(top: string, wt: string, links: string[]) {
+  for (const link of links) {
     try {
       fs.unlinkSync(link);
     } catch {
@@ -152,10 +163,20 @@ export async function fix(o: FixOptions): Promise<FixResult> {
 
   // ---- 1. deterministic index candidates (no LLM) ------------------------------------------------------------
   const scanned = finding.plan?.selectiveSeqScans?.[0]?.table;
+  if (o.userMigration) {
+    const sql = o.userMigration.trim().replace(/;+$/, '');
+    log(`${finding.id}: verifying your migration`);
+    const r = await verify({ db, records: trace.records, migrationSql: sql, target: [finding.fingerprint], minSpeedup, allowRemote: o.allowRemote, seed: o.seed, ...o.tuning });
+    const outcome: Attempt['outcome'] = r.verdict === 'PASS' ? 'verified' : r.verdict === 'REJECT' ? 'rejected' : 'unverifiable';
+    attempts.push({ n: 1, via: 'user-migration', description: sql.slice(0, 200), outcome, failed: outcome === 'verified' ? [] : gateText(r) });
+    const down = [...sql.matchAll(/create\s+(?:unique\s+)?index\s+(?:concurrently\s+)?(?:if\s+not\s+exists\s+)?("[^"]+"|\w+)/gi)].map((m) => `DROP INDEX IF EXISTS ${m[1]};`).join('\n');
+    if (r.verdict === 'PASS') return accept({ via: 'user-migration', migrationSql: sql + ';', downSql: down || undefined, verify: r });
+    return finish(outcome === 'rejected' ? 'rejected' : 'unverifiable', `${finding.id}: your migration did not pass the gate`);
+  }
   const candidates = o.deterministic === false ? [] : indexCandidates(finding.sql, scanned).slice(0, 3);
   for (const c of candidates) {
     log(`${finding.id}: trying ${c.verifySql}`);
-    const r = await verify({ db, records: trace.records, migrationSql: c.verifySql, target: [finding.fingerprint], minSpeedup, allowRemote: o.allowRemote, seed: o.seed });
+    const r = await verify({ db, records: trace.records, migrationSql: c.verifySql, target: [finding.fingerprint], minSpeedup, allowRemote: o.allowRemote, seed: o.seed, ...o.tuning });
     const outcome: Attempt['outcome'] = r.verdict === 'PASS' ? 'verified' : r.verdict === 'REJECT' ? 'rejected' : 'unverifiable';
     attempts.push({ n: attempts.length + 1, via: 'index-candidate', description: c.verifySql, outcome, failed: outcome === 'verified' ? [] : gateText(r) });
     if (r.verdict === 'PASS') return accept({ via: 'index-candidate', migrationSql: c.migrationSql(db.kind), downSql: c.downSql, verify: r });
@@ -171,7 +192,7 @@ export async function fix(o: FixOptions): Promise<FixResult> {
   if (topRun.status !== 0) throw new UsageError('agent fixes need a git repository so every change can be reverted cleanly (`git init` and commit first)');
   const top = path.resolve(topRun.stdout.trim());
   if (git(top, 'rev-parse', '--verify', 'HEAD').status !== 0) throw new UsageError('the repository has no commits yet: commit first so the fix is a clean diff against HEAD');
-  const dirty = git(top, 'status', '--porcelain', '--', '.', ':!.sql-anything').stdout.trim();
+  const dirty = git(top, 'status', '--porcelain', '--', '.', ':(exclude,glob)**/.sql-anything/**').stdout.trim();
   if (dirty) throw new UsageError(`the working tree has uncommitted changes:\n${dirty.split('\n').slice(0, 5).join('\n')}\nCommit or stash them first so baseline and patched differ only by the fix.`);
 
   const max = o.maxAttempts ?? 3;
@@ -183,15 +204,17 @@ export async function fix(o: FixOptions): Promise<FixResult> {
     const add = gitRaw(top, 'worktree', 'add', '--detach', wt, 'HEAD');
     if (add.status !== 0) throw new Error(`git worktree add failed: ${add.stderr}`);
     const cwd = path.join(wt, subdir);
-    let link: string | null = null;
-    const nm = path.join(projectDir, 'node_modules');
-    if (fs.existsSync(nm) && !fs.existsSync(path.join(cwd, 'node_modules'))) {
-      link = path.join(cwd, 'node_modules');
-      fs.symlinkSync(nm, link, 'junction');
+    // dependencies are not part of the checkout: link them in. Hoisted monorepos keep node_modules at the repo root, so link both.
+    const links: string[] = [];
+    for (const [from, to] of [[path.join(projectDir, 'node_modules'), path.join(cwd, 'node_modules')], [path.join(top, 'node_modules'), path.join(wt, 'node_modules')]]) {
+      if (fs.existsSync(from) && !fs.existsSync(to) && !links.includes(to)) {
+        fs.symlinkSync(from, to, 'junction');
+        links.push(to);
+      }
     }
     try {
       log(`${finding.id}: agent attempt ${n}/${max}`);
-      const prompt = buildPrompt(finding, projectDir, previous);
+      const prompt = buildPrompt(finding, projectDir, previous, finding.kind === 'n+1' ? report.findings.filter((x) => x.kind === 'n+1' && x.id !== finding.id) : []);
       const run = await runAgent(o.agent, prompt, cwd, { timeoutMs: o.agentTimeoutMs, env: { SQL_ANYTHING_FINDING: finding.id } });
       if (run.timedOut || run.exitCode !== 0) {
         const why = run.timedOut ? 'the agent timed out' : `the agent exited with code ${run.exitCode}: ${run.tail.slice(-300).trim()}`;
@@ -200,7 +223,7 @@ export async function fix(o: FixOptions): Promise<FixResult> {
         previous.push(why);
         continue;
       }
-      gitRaw(wt, 'add', '-A', '--', '.', ':!node_modules', ':!.sql-anything');
+      gitRaw(wt, 'add', '-A', '--', '.', ':(exclude,glob)**/node_modules/**', ':(exclude,glob)**/.sql-anything/**');
       const changed = gitRaw(wt, 'diff', '--cached', '--name-only').stdout.split('\n').filter(Boolean);
       const proposal = readProposal(cwd);
       if (proposal && 'error' in proposal) {
@@ -222,11 +245,15 @@ export async function fix(o: FixOptions): Promise<FixResult> {
       const failed: string[] = [];
       let unverifiable = false;
       if (proposal && (proposal.migration || proposal.rewrites)) {
-        vr = await verify({ db, records: trace.records, migrationSql: proposal.migration, rewrites: proposal.rewrites, target: proposal.rewrites ? Object.keys(proposal.rewrites) : [finding.fingerprint], minSpeedup, allowRemote: o.allowRemote, seed: o.seed });
+        vr = await verify({ db, records: trace.records, migrationSql: proposal.migration, rewrites: proposal.rewrites, target: proposal.rewrites ? Object.keys(proposal.rewrites) : [finding.fingerprint], minSpeedup, allowRemote: o.allowRemote, seed: o.seed, ...o.tuning });
         if (vr.verdict === 'REJECT') failed.push(...gateText(vr));
         else if (vr.verdict === 'UNVERIFIABLE') (unverifiable = true), failed.push(...gateText(vr));
       }
-      if (changed.length) {
+      if (changed.length && finding.kind !== 'n+1') {
+        // The end-to-end check measures ONE workload. It can vouch for an N+1 fix to that workload, not for an unrelated statement.
+        unverifiable = true;
+        failed.push(`application code changed (${changed.join(', ')}) for a ${finding.kind} finding, which can only be verified query by query. Express the fix as .sql-anything/proposal.json (a migration or rewrites) instead of editing code.`);
+      } else if (changed.length) {
         const c = o.check;
         if (!c?.checkUrl && !c?.checkCmd) {
           unverifiable = true;
@@ -252,7 +279,7 @@ export async function fix(o: FixOptions): Promise<FixResult> {
       }
       return accept(record);
     } finally {
-      removeWorktree(top, wt, link); // the verified diff is already saved as fix.patch
+      removeWorktree(top, wt, links); // the verified diff is already saved as fix.patch
     }
   }
   const last = attempts[attempts.length - 1];

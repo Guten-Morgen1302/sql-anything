@@ -54,13 +54,25 @@ export function indexCandidates(sql: string, scannedTable?: string): IndexCandid
     table = unq(table);
     preds.push({ table, col, kind });
   }
+  // ORDER BY at any depth (an ORM's `... FROM t ORDER BY created_at DESC LIMIT n` subquery): the first sort column of a
+  // single known table can be served by an index, which turns "scan everything, sort, take 50" into "walk the index".
+  const orderBy = new Map<string, string>(); // table -> first sort column
+  for (const m of s.matchAll(/\border by\s+(?:("[^"]+"|\w+)\.)?("[^"]+"|\w+)(?:\s+(?:asc|desc))?/g)) {
+    const col = unq(m[2]);
+    if (col === '?' || STOP.has(col)) continue;
+    const table = m[1] ? alias.get(unq(m[1])) : only.size === 1 ? [...only][0] : undefined;
+    if (table && !orderBy.has(unq(table))) orderBy.set(unq(table), col);
+  }
   const out: IndexCandidate[] = [];
-  for (const table of new Set(preds.map((p) => p.table))) {
+  for (const table of new Set([...preds.map((p) => p.table), ...orderBy.keys()])) {
     if (scannedTable && table.toLowerCase() !== scannedTable.toLowerCase()) continue;
     const mine = preds.filter((p) => p.table === table);
     const eq = [...new Set(mine.filter((p) => p.kind === 'eq').map((p) => p.col))];
     const range = [...new Set(mine.filter((p) => p.kind === 'range').map((p) => p.col))].filter((c) => !eq.includes(c));
-    const cols = [...eq, ...range.slice(0, 1)].slice(0, 3);
+    const sortCol = orderBy.get(table);
+    // equality columns, then the sort column (so rows come out already ordered), else one range column
+    const tail = sortCol && !eq.includes(sortCol) ? [sortCol] : range.slice(0, 1);
+    const cols = [...eq, ...tail].slice(0, 3);
     if (!cols.length || (cols.length === 1 && cols[0] === 'id')) continue; // `id` is almost always the primary key already
     out.push(make(table, cols));
   }

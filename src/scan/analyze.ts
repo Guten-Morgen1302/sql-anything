@@ -1,4 +1,4 @@
-import { isNoise, kindOf } from '../sql/classify.js';
+import { isIntrospection, isNoise, kindOf } from '../sql/classify.js';
 import { fingerprint, normalize } from '../sql/normalize.js';
 import { hasUnverifiable, decodeParams } from '../trace/params.js';
 import type { TraceRecord } from '../trace/types.js';
@@ -76,7 +76,7 @@ export async function analyze(records: TraceRecord[], hooksLoaded: number, opts:
   let noise = 0;
   const usable: TraceRecord[] = [];
   for (const r of records) {
-    if (isNoise(r.sql)) noise++;
+    if (isNoise(r.sql) || isIntrospection(r.sql)) noise++; // ORM start-up schema introspection is not an application hot spot
     else usable.push(r);
   }
   const selects = usable.filter((r) => kindOf(r.sql) === 'select');
@@ -112,7 +112,9 @@ export async function analyze(records: TraceRecord[], hooksLoaded: number, opts:
       }
       (buckets.get(key) ?? buckets.set(key, []).get(key)!).push(r);
     }
-    const hits = [...buckets.values()].filter((b) => b.length >= nMin && new Set(b.map((x) => JSON.stringify(x.params ?? null))).size >= 2);
+    const hits = [...buckets.values()].filter((b) => b.length >= nMin && new Set(b.map((x) => `${x.sql}\u0000${JSON.stringify(x.params ?? null)}`)).size >= 2);
+    // ^ the key is the raw SQL text AND the bind params: ORMs such as Sequelize inline values into the SQL (params stay empty),
+    //   so judging only by bind params would call a 400-lookup loop "the same query repeated".
     if (!hits.length) continue;
     const inHits = hits.flat();
     const counts = hits.map((b) => b.length);
@@ -151,11 +153,12 @@ export async function analyze(records: TraceRecord[], hooksLoaded: number, opts:
     const total = durs.reduce((a, b) => a + b, 0);
     const { callsite, confidence } = bestCallsite(g.recs);
     const base = { callsite, confidence, calls: g.recs.length, totalMs: total, durs, plan };
-    if (plan?.selectiveSeqScans.length) {
+    if (plan?.correlatedSubquery) {
+      const scan = plan.selectiveSeqScans[0];
+      findings.push(mk('correlated-subquery', g, { ...base, detail: `correlated subquery re-executes per outer row${scan ? ` and scans ${scan.table} (${scan.scannedRows.toLocaleString('en-US')} rows) each time` : ''}; a join with pre-aggregation (or an index on the correlated column) removes the loop` }));
+    } else if (plan?.selectiveSeqScans.length) {
       const s = plan.selectiveSeqScans[0];
       findings.push(mk('seq-scan', g, { ...base, detail: `sequential scan of ${s.table} (${s.scannedRows.toLocaleString('en-US')} rows) rejects ${(s.rejected * 100).toFixed(1)}% of them: an index on the filtered columns should turn this into a lookup` }));
-    } else if (plan?.correlatedSubquery) {
-      findings.push(mk('correlated-subquery', g, { ...base, detail: 'correlated subquery re-executes per outer row; a join or pre-aggregation usually removes the loop' }));
     } else if (!n1Fps.has(g.fp) && (percentile(durs, 95) >= (opts.slowP95Ms ?? 50) || (totalSelectMs > 0 && total / totalSelectMs >= (opts.slowShare ?? 0.05) && g.recs.length >= 3))) {
       findings.push(mk('slow-query', g, { ...base, detail: `${((total / Math.max(totalSelectMs, 1e-9)) * 100).toFixed(0)}% of all captured read time` }));
     }
@@ -177,7 +180,7 @@ function mk(
     id: '',
     kind,
     fingerprint: g.fp,
-    sql: normalize(g.sql).slice(0, 400),
+    sql: normalize(g.sql).slice(0, 8000), // full text: index candidates need the trailing ORDER BY / LIMIT; displays truncate
     callsite: x.callsite,
     callsiteConfidence: x.confidence,
     calls: x.calls,

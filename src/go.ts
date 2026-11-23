@@ -1,7 +1,7 @@
 import path from 'node:path';
 import type { AgentSpec } from './agent.js';
 import { runScan, UsageError } from './api.js';
-import { fix } from './fix/fix.js';
+import { fix, type FixOptions } from './fix/fix.js';
 import type { FixResult } from './fix/types.js';
 import type { Finding } from './scan/analyze.js';
 import { writeReport, type ReportOutcome } from './report/report.js';
@@ -19,6 +19,8 @@ export interface GoOptions {
   maxAttempts?: number;
   check?: Partial<Pick<CheckOptions, 'runCmd' | 'checkUrl' | 'checkCmd' | 'reps'>>;
   minSpeedup?: number;
+  env?: Record<string, string>;
+  tuning?: FixOptions['tuning'];
   allowRemote?: boolean;
   agentTimeoutMs?: number;
   label?: string;
@@ -55,14 +57,14 @@ export async function go(o: GoOptions): Promise<GoOutcome> {
   const plan = goPlan(o);
   if (o.dryRun) return { exitCode: 0, plan, findings: [], fixes: [] };
 
-  const scan = await runScan({ db: o.db, cmd: o.cmd, cwd: o.cwd, hits: o.hits, hitRepeat: o.hitRepeat, duration: o.duration, allowRemote: o.allowRemote, log });
+  const scan = await runScan({ db: o.db, cmd: o.cmd, cwd: o.cwd, hits: o.hits, hitRepeat: o.hitRepeat, duration: o.duration, env: o.env, allowRemote: o.allowRemote, log });
   if (scan.exitCode !== 0 || !scan.report) return { exitCode: 4, dir: scan.dir, plan, findings: [], fixes: [], error: scan.error };
   const findings = scan.report.findings;
   if (!findings.length) return { exitCode: 0, dir: scan.dir, plan, findings, fixes: [] };
 
-  // one fix per fingerprint: an N+1 and its seq scan are the same statement
-  const seen = new Set<string>();
-  const todo = findings.filter((f) => (seen.has(f.fingerprint) ? false : (seen.add(f.fingerprint), true))).slice(0, o.maxFixes ?? 3);
+  // Ranked order, one fix per finding. An N+1 and its sequential scan can be the same statement: the scan gets an index,
+  // the N+1 gets a code change (when an agent is available) and is measured end to end.
+  const todo = findings.slice(0, o.maxFixes ?? 3);
   const check = o.check ?? (o.hits?.length ? { runCmd: o.cmd, checkUrl: o.hits[0] } : undefined);
   const fixes: FixResult[] = [];
   for (const f of todo) {
@@ -73,6 +75,8 @@ export async function go(o: GoOptions): Promise<GoOutcome> {
         db: o.db,
         projectDir: o.cwd,
         agent: o.agent,
+        deterministic: !(f.kind === 'n+1' && o.agent),
+        tuning: o.tuning,
         maxAttempts: o.maxAttempts,
         check,
         minSpeedup: o.minSpeedup,

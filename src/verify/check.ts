@@ -44,6 +44,8 @@ interface Variant {
   bodies: string[];
   times: number[];
   queries: number[];
+  /** databases the app actually connected to (pg), as seen by the hook */
+  conns: string[];
 }
 
 /** Leaves of a JSON value keyed by path. Object keys are visited sorted, so key order never matters. */
@@ -68,7 +70,11 @@ function canon(body: string): { json: boolean; map: Map<string, string>; text: s
 
 function envFor(target: DbTarget): Record<string, string> {
   const env: Record<string, string> = { SQL_ANYTHING_DB_URL: target.url };
-  if (target.kind === 'pg') env.DATABASE_URL = target.url;
+  if (target.kind === 'pg') {
+    env.DATABASE_URL = target.url;
+    // for apps that configure their database themselves: the hook points every pg connection at the clone
+    if (!target.searchPath) env.SQL_ANYTHING_PG_REDIRECT = target.url;
+  }
   if (target.searchPath) env.PGOPTIONS = `-c search_path=${target.searchPath},public`;
   return env;
 }
@@ -87,11 +93,16 @@ async function runInterleaved(o: CheckOptions, targets: DbTarget[], warm: number
   const dirs = [o.baselineDir, o.patchedDir];
   const envs = targets.map(envFor);
   const vs: [Variant, Variant] = [
-    { bodies: [], times: [], queries: [] },
-    { bodies: [], times: [], queries: [] },
+    { bodies: [], times: [], queries: [], conns: [] },
+    { bodies: [], times: [], queries: [], conns: [] },
   ];
   const traceRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'sql-anything-check-'));
   const order = (): number[] => (rng() < 0.5 ? [0, 1] : [1, 0]);
+  const collectConns = () => {
+    for (const arm of [0, 1]) {
+      for (const d of fs.readdirSync(traceRoot).filter((n) => n.startsWith(`arm${arm}`))) vs[arm].conns.push(...readTrace(path.join(traceRoot, d)).conns.map((c) => c.database ?? ''));
+    }
+  };
   try {
     if (o.checkCmd) {
       for (let i = 0; i < warm + reps; i++) {
@@ -106,6 +117,7 @@ async function runInterleaved(o: CheckOptions, targets: DbTarget[], warm: number
           vs[arm].queries.push(readTrace(td).records.filter((q) => !isNoise(q.sql)).length);
         }
       }
+      collectConns();
       return vs;
     }
     if (!o.checkUrl!.includes('{port}')) {
@@ -120,6 +132,7 @@ async function runInterleaved(o: CheckOptions, targets: DbTarget[], warm: number
           vs[arm].queries.push(h.req !== null ? (counts.get(h.req) ?? 0) : NaN);
         });
       }
+      collectConns();
       return vs;
     }
     // both servers up at once, each on its own port
@@ -165,6 +178,7 @@ async function runInterleaved(o: CheckOptions, targets: DbTarget[], warm: number
       const counts = countByReq(path.join(traceRoot, `arm${arm}`));
       vs[arm].queries = reqIds[arm].map((id) => (Number.isFinite(id) ? (counts.get(id) ?? 0) : NaN));
     }
+    collectConns();
     return vs;
   } finally {
     fs.rmSync(traceRoot, { recursive: true, force: true });
@@ -198,6 +212,15 @@ export async function check(o: CheckOptions): Promise<CheckResult> {
   warnings.push(...shadows.warnings);
   try {
     const [base, patched] = await runInterleaved(o, shadows.targets, warm, reps, rng, warnings);
+    // Never measure the wrong database: for Postgres the hook records every connection; all of them must be the clone.
+    if (shadows.targets[0].kind === 'pg' && !shadows.targets[0].searchPath) {
+      const want = [new URL(shadows.targets[0].url).pathname.slice(1), new URL(shadows.targets[1].url).pathname.slice(1)];
+      for (const [i, v] of [base, patched].entries()) {
+        const wrong = [...new Set(v.conns.filter((d) => d !== want[i]))];
+        if (!v.conns.length) return empty('UNVERIFIABLE', `could not confirm which database the ${i ? 'patched' : 'baseline'} app used: the capture hook recorded no connection. Not measured, so nothing was run against an unknown database.`);
+        if (wrong.length) return empty('UNVERIFIABLE', `the ${i ? 'patched' : 'baseline'} app connected to ${wrong.join(', ')} instead of the clone ${want[i]}. Result discarded.`);
+      }
+    }
     if (base.bodies.length < reps || patched.bodies.length < reps) {
       return empty('UNVERIFIABLE', `the workload did not complete ${reps} runs on both sides (baseline ${base.bodies.length}, patched ${patched.bodies.length}). Is the server reachable at the check URL?`);
     }

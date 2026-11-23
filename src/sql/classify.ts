@@ -56,3 +56,11 @@ export function topLevel(sql: string): { orderBy: boolean; limit: boolean } {
   }
   return { orderBy, limit };
 }
+
+/**
+ * Queries about the schema itself (ORM start-up introspection, `\d`-style lookups). After any DDL they legitimately return
+ * different rows, so they cannot be compared before and after a migration, and they are not application hot spots.
+ */
+export function isIntrospection(sql: string): boolean {
+  return /\b(information_schema\.|pg_catalog\.|pg_class\b|pg_index\b|pg_indexes\b|pg_constraint\b|pg_attribute\b|pg_namespace\b|pg_tables\b|pg_type\b|pg_get_\w+\(|sqlite_master\b|sqlite_schema\b|sqlite_temp_master\b|pragma_\w+)/i.test(sql);
+}

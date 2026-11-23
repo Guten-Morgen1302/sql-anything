@@ -3,7 +3,7 @@ import type { VerifyResult } from '../verify/verify.js';
 
 export interface Attempt {
   n: number;
-  via: 'index-candidate' | 'agent';
+  via: 'index-candidate' | 'user-migration' | 'agent';
   description: string;
   outcome: 'verified' | 'rejected' | 'unverifiable' | 'no-change' | 'error';
   /** human-readable failed gates, fed back to the agent on the next attempt */
@@ -15,7 +15,7 @@ export interface FixRecord {
   findingId: string;
   fingerprint: string;
   kind: string;
-  via: 'index-candidate' | 'agent';
+  via: 'index-candidate' | 'user-migration' | 'agent';
   callsite: string | null;
   sql: string;
   migrationSql?: string;

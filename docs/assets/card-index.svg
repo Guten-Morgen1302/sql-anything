@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="F1 seq-scan: 13.9× faster" font-family="ui-monospace, SFMono-Regular, &#39;SF Mono&#39;, Menlo, Consolas, &#39;Liberation Mono&#39;, monospace">
+<rect width="1200" height="630" fill="#0d1117"/>
+<rect x="24" y="24" width="1152" height="582" rx="20" fill="#161b22" stroke="#30363d"/>
+<text x="64" y="84" font-size="26" fill="#c9d1d9" font-weight="700">sql-anything</text>
+<text x="1136" y="84" font-size="22" fill="#8b949e" text-anchor="end">F1 · seq-scan</text>
+<text x="1136" y="112" font-size="16" fill="#d29922" text-anchor="end">synthetic demo data</text>
+<text x="64" y="232" font-size="128" fill="#3fb950" font-weight="700">13.9×</text>
+<text x="64" y="276" font-size="24" fill="#c9d1d9" >faster · median query time</text>
+<text x="64" y="306" font-size="16" fill="#8b949e" >95% CI lower bound 13.4× · n=360</text>
+<text x="520" y="128" font-size="18" fill="#8b949e" >p50 latency</text>
+<rect x="520" y="140" width="420" height="24" rx="5" fill="#6e7681"/>
+<text x="954" y="158" font-size="18" fill="#c9d1d9" >5.6 ms before</text>
+<rect x="520" y="172" width="30" height="24" rx="5" fill="#3fb950"/>
+<text x="954" y="190" font-size="18" fill="#3fb950" >0.41 ms after</text>
+<text x="520" y="238" font-size="18" fill="#8b949e" >p95 latency</text>
+<rect x="520" y="250" width="420" height="24" rx="5" fill="#6e7681"/>
+<text x="954" y="268" font-size="18" fill="#c9d1d9" >8.0 ms before</text>
+<rect x="520" y="282" width="34" height="24" rx="5" fill="#3fb950"/>
+<text x="954" y="300" font-size="18" fill="#3fb950" >0.64 ms after</text>
+<text x="64" y="372" font-size="18" fill="#8b949e" >plan</text>
+<text x="150" y="372" font-size="18" fill="#f85149" >SCAN orders</text>
+<text x="150" y="400" font-size="18" fill="#3fb950" >→ SEARCH orders USING INDEX idx_orders_customer_id (customer_id=?)</text>
+<text x="64" y="436" font-size="18" fill="#8b949e" >where</text>
+<text x="150" y="436" font-size="18" fill="#c9d1d9" >server.mjs:15</text>
+<text x="64" y="472" font-size="16" fill="#6e7681" >select count(*) as orders, coalesce(sum(total_cents), ?) as spent from orders where customer_id = ?</text>
+<rect x="64" y="534" width="400" height="40" rx="20" fill="#1f6f43"/>
+<path d="M82 554 l6 6 l12 -13" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+<text x="112" y="560" font-size="20" fill="#ffffff" font-weight="700">123/123 replayed · row parity</text>
+<text x="64" y="598" font-size="13" fill="#6e7681" >replay-verified on captured inputs against one data snapshot. Evidence, not proof: production data and plans can differ. Timings include capture overhead.</text>
+</svg>

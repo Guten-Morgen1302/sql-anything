@@ -35,3 +35,16 @@ export interface HookLoadedRecord {
   node: string;
   patched: string[];
 }
+
+/** A database connection the app opened, as the hook saw it (after any redirect). */
+export interface ConnRecord {
+  v: 1;
+  type: 'conn';
+  db: 'pg';
+  host?: string;
+  port?: number;
+  database?: string;
+  pid: number;
+  thread: number;
+  redirected?: boolean;
+}

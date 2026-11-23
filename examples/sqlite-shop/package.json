@@ -1,0 +1,10 @@
+{
+  "name": "sqlite-shop-example",
+  "private": true,
+  "type": "module",
+  "description": "SYNTHETIC example app for sql-anything: slow on purpose. Zero dependencies, zero Docker.",
+  "scripts": {
+    "seed": "node seed.mjs shop.db",
+    "start": "node server.mjs"
+  }
+}

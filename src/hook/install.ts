@@ -214,6 +214,28 @@ export function install(): string[] {
         return op.call(this, cfg, ...rest);
       };
     }
+    // Where is this client really connecting? SQL_ANYTHING_PG_REDIRECT points a verification run at a clone for apps that
+    // configure their database in their own way (explicit host/database options that DATABASE_URL never reaches). The
+    // connection actually used is recorded so `check` can refuse to measure the wrong database.
+    const oconnect = CP.connect;
+    CP.connect = function (this: any, ...a: any[]) {
+      try {
+        const cp = this.connectionParameters;
+        const redirect = process.env.SQL_ANYTHING_PG_REDIRECT;
+        if (redirect && cp) {
+          const u = new URL(redirect);
+          cp.host = this.host = u.hostname;
+          cp.port = this.port = Number(u.port || 5432);
+          cp.database = this.database = decodeURIComponent(u.pathname.slice(1));
+          cp.user = this.user = decodeURIComponent(u.username);
+          cp.password = this.password = decodeURIComponent(u.password);
+        }
+        writer.write({ v: 1, type: 'conn', db: 'pg', host: cp?.host, port: cp?.port, database: cp?.database, pid: process.pid, thread: threadId, redirected: !!redirect });
+      } catch {
+        /* never break the app's connection over tracing */
+      }
+      return oconnect.apply(this, a);
+    };
     CP.query = function (this: any, cfg: any, ...rest: any[]) {
       try {
         const isObj = cfg && typeof cfg === 'object';
