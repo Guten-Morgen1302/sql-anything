@@ -1,0 +1,35 @@
+{
+  "name": "sql-anything",
+  "version": "0.1.0-dev",
+  "description": "Find the slow 5% of your SQL, let an agent fix it, and replay-verify the fix before you trust it.",
+  "type": "module",
+  "bin": {
+    "sql-anything": "dist/src/cli.js"
+  },
+  "files": [
+    "dist/src",
+    "skills",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test:unit": "node --test \"dist/test/unit/*.test.js\"",
+    "test:integration": "node --test --test-concurrency=1 --test-timeout=600000 \"dist/test/integration/*.test.js\"",
+    "test": "npm run build && npm run test:unit && npm run test:integration",
+    "test:sqlite": "npm run build && npm run test:unit && node --test --test-concurrency=1 \"dist/test/integration/*.sqlite.test.js\""
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^9.6.0",
+    "@types/node": "^24.0.0",
+    "@types/pg": "^8.11.0",
+    "better-sqlite3": "^12.0.0",
+    "embedded-postgres": "^18.0.0-beta.1",
+    "typescript": "^5.9.0"
+  }
+}
