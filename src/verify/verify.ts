@@ -6,6 +6,7 @@ import { fingerprint } from '../sql/normalize.js';
 import { bootstrapRatio, median, mulberry32, percentile, type RatioCI } from '../stats.js';
 import { decodeParams, hasUnverifiable } from '../trace/params.js';
 import type { TraceRecord } from '../trace/types.js';
+import { explainOn } from '../scan/explain.js';
 import { compare, digest } from './canonical.js';
 
 export interface VerifyOptions {
@@ -62,6 +63,8 @@ export interface VerifyResult {
   target: string[] | 'workload';
   speed?: { baseP50Ms: number; baseP95Ms: number; patchedP50Ms: number; patchedP95Ms: number; speedup: RatioCI };
   perFingerprint: FpStats[];
+  /** plan summaries for the first verified target input: how the plan changed (e.g. SCAN -> SEARCH USING INDEX) */
+  plans?: { before: string; after: string };
   shadowMethod: string;
   warnings: string[];
   seed: number;
@@ -287,6 +290,15 @@ export async function verify(o: VerifyOptions): Promise<VerifyResult> {
 
     // ---- 4. write guard --------------------------------------------------------------------------------------
     const writeGate = await writeGuard(A, B, usable, o, rng, shadows.targets[0].kind);
+
+    try {
+      const pi = verifiedTarget[0];
+      const before = await explainOn(A, pi.sql, pi.params);
+      const after = await explainOn(B, pi.patchedSql, pi.params);
+      base.plans = { before: before.summary, after: after.summary };
+    } catch {
+      /* the plan shift is a nice-to-have on the report card, never a gate */
+    }
 
     const gates = [parity, speedGate, regressionGate, writeGate];
     if (o.gate === false) return finish('PASS', gates, { speed, reason: 'bench only: gates not enforced' });

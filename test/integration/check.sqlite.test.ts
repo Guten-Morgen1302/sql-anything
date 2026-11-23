@@ -54,9 +54,9 @@ describe('N+1 verifier (--check-url / --check-cmd)', () => {
   it('--check-cmd: compares stdout of a one-shot workload', async () => {
     const r = await check({ db, baselineDir: path.join(root, 'base'), patchedDir: path.join(root, 'fixed'), checkCmd: [process.execPath, 'server.mjs', 'cmd-all'], reps: 6 });
     assert.equal(r.verdict, 'PASS', JSON.stringify(r.gates) + (r.reason ?? ''));
-    assert.deepEqual(r.queriesPerRun, { baseline: 204, patched: 4 });
+    assert.deepEqual(r.queriesPerRun, { baseline: 408, patched: 8 });
     assert.ok(r.wall.baselineP50Ms >= 150, `workload must outweigh node start-up jitter, baseline p50 ${r.wall.baselineP50Ms} ms`);
-    console.log(`    [check-cmd] 204 -> 4 queries, ${r.wall.baselineP50Ms} -> ${r.wall.patchedP50Ms} ms (${r.wall.speedup.point.toFixed(1)}x)`);
+    console.log(`    [check-cmd] 408 -> 8 queries, ${r.wall.baselineP50Ms} -> ${r.wall.patchedP50Ms} ms (${r.wall.speedup.point.toFixed(1)}x)`);
   });
 
   it('--check-cmd: a tiny workload is dominated by process start-up, so a 51 -> 1 query win is NOT claimed as a speedup', async () => {
