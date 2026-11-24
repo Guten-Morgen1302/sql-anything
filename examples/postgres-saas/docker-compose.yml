@@ -1,12 +1,14 @@
+# The password is not stored here: `npm run setup` generates a random one into a git-ignored .env, which Compose reads.
 services:
   db:
     image: postgres:17
     environment:
       POSTGRES_USER: saas
-      POSTGRES_PASSWORD: saas
+      POSTGRES_PASSWORD: ${SAAS_DB_PASSWORD:?run "npm run setup" first (it generates .env)}
       POSTGRES_DB: saas
     ports:
-      - "54330:5432"
+      # localhost only: this database is for the example, nothing else on your network should reach it
+      - "127.0.0.1:54330:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U saas -d saas"]
       interval: 2s

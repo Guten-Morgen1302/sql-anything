@@ -5,7 +5,7 @@ insert into "Tags"(name) select 'tag' || i from generate_series(1, 60) i;
 
 insert into "Users"(id, email, username, bio, image, password, "createdAt", "updatedAt")
 select i, 'user' || i || '@example.com', 'user' || i, 'Bio of user ' || i, 'https://example.com/u/' || i || '.png',
-       '$2b$10$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', now(), now()
+       'placeholder-not-a-login', now(), now() -- the benchmark only issues GET requests: these users cannot log in
 from generate_series(1, 3000) i;
 
 insert into "Articles"(id, slug, title, description, body, "createdAt", "updatedAt", "userId")

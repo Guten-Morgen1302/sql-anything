@@ -104,6 +104,6 @@ describe('scan on a real app (Postgres, pg Pool)', () => {
   });
 
   it('refuses to clone a non-local host unless told to', async () => {
-    await assert.rejects(makeShadows({ kind: 'pg', url: 'postgres://u:p@db.example.com:5432/prod' }, 1), /refusing to clone db\.example\.com/);
+    await assert.rejects(makeShadows({ kind: 'pg', url: 'postgres://db.example.com:5432/prod' }, 1), /refusing to clone db\.example\.com/);
   });
 });

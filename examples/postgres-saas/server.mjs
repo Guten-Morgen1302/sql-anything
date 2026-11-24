@@ -4,8 +4,9 @@
 //   GET /api/tenants/:id/dashboard  correlated subquery: a comment count re-computed for every project row
 import http from 'node:http';
 import pg from 'pg';
+import { databaseUrl } from './db.mjs';
 
-const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL ?? 'postgres://saas:saas@localhost:54330/saas', max: 4 });
+const pool = new pg.Pool({ connectionString: databaseUrl(), max: 4 });
 
 // @n1-begin
 async function projects(tenant) {

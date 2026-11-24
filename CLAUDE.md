@@ -18,7 +18,7 @@ npm run check:pack               # fails if the npm tarball would contain anythi
 node dist/src/cli.js --help      # the CLI from a checkout
 ```
 
-Postgres tests start an embedded Postgres, or use `SA_TEST_PG_URL=postgres://user:pass@host:5432/postgres` (CI does).
+Postgres tests start an embedded Postgres, or use `SA_TEST_PG_URL=postgres://USER:PASSWORD@HOST:5432/postgres` (CI does).
 Integration tests run serially on purpose: they measure timings.
 
 ## Architecture map

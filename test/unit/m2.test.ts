@@ -91,7 +91,7 @@ describe('SVG benchmark card', () => {
 
 describe('agent plumbing', () => {
   it('the agent never sees database connection strings or the hook', () => {
-    const env = scrubbedEnv({ PATH: '/bin', ANTHROPIC_API_KEY: 'k', DATABASE_URL: 'postgres://u:p@h/db', SQL_ANYTHING_DB_URL: 'x', PGPASSWORD: 'p', PGHOST: 'h', POSTGRES_URL: 'p', DB_HOST: 'h', NODE_OPTIONS: '--import hook', SQL_ANYTHING_TRACE_DIR: 't' }, { SQL_ANYTHING_FINDING: 'F1' });
+    const env = scrubbedEnv({ PATH: '/bin', ANTHROPIC_API_KEY: 'k', DATABASE_URL: 'postgres://localhost/db', SQL_ANYTHING_DB_URL: 'x', PGPASSWORD: 'p', PGHOST: 'h', POSTGRES_URL: 'p', DB_HOST: 'h', NODE_OPTIONS: '--import hook', SQL_ANYTHING_TRACE_DIR: 't' }, { SQL_ANYTHING_FINDING: 'F1' });
     assert.deepEqual(Object.keys(env).sort(), ['ANTHROPIC_API_KEY', 'PATH', 'SQL_ANYTHING_FINDING']);
   });
   it('resolveAgent: none, custom, unknown, and a missing claude CLI is a clear error', () => {

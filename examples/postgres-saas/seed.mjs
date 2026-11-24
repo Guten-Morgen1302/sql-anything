@@ -41,7 +41,8 @@ export async function seed(url, scale = Number(process.env.SEED_SCALE ?? 1)) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const url = process.env.DATABASE_URL ?? 'postgres://saas:saas@localhost:54330/saas';
+  const { databaseUrl } = await import('./db.mjs');
   const t0 = Date.now();
-  console.log(`seeded in ${Date.now() - t0 || ''}`, await seed(url));
+  const counts = await seed(databaseUrl());
+  console.log(`seeded in ${((Date.now() - t0) / 1000).toFixed(1)} s`, counts);
 }

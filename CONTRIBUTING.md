@@ -30,7 +30,7 @@ Postgres tests use an **embedded Postgres** by default. To use a server you alre
 superuser URL; they create and drop their own `sa_*` databases:
 
 ```bash
-SA_TEST_PG_URL=postgres://postgres:postgres@localhost:5432/postgres npm run test:integration:pg
+SA_TEST_PG_URL=postgres://USER:PASSWORD@localhost:5432/postgres npm run test:integration:pg
 ```
 
 Notes:

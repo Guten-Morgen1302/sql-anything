@@ -4,7 +4,7 @@
   "type": "module",
   "description": "SYNTHETIC example app for sql-anything: Postgres, 100k+ rows, three classic bottlenecks.",
   "scripts": {
-    "setup": "docker compose up -d --wait && node seed.mjs",
+    "setup": "node setup.mjs",
     "start": "node server.mjs",
     "teardown": "docker compose down"
   },

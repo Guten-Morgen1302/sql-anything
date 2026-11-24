@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import net from 'node:net';
 import os from 'node:os';
@@ -114,7 +115,7 @@ export async function seedPg(url: string, opts: { indexed?: boolean; orders?: nu
 /** Real Postgres without Docker. */
 export async function startPg(): Promise<{ baseUrl: string; createDb(name: string): Promise<string>; stop(): Promise<void> }> {
   // CI (and anyone with a Postgres already running) sets SA_TEST_PG_URL to a superuser URL, e.g.
-  // postgres://postgres:postgres@localhost:5432/postgres. Tests then create their own throwaway databases on that server
+  // postgres://USER:PASSWORD@localhost:5432/postgres. Tests then create their own throwaway databases on that server
   // instead of starting an embedded one.
   const external = process.env.SA_TEST_PG_URL;
   if (external) {
@@ -151,10 +152,11 @@ export async function startPg(): Promise<{ baseUrl: string; createDb(name: strin
   const EP: any = (await import('embedded-postgres')).default;
   const port = await freePort();
   const dir = tmpDir('sa-pg-');
-  const pg = new EP({ databaseDir: path.join(dir, 'data'), user: 'sa', password: 'sa', port, persistent: false, onLog: () => {}, onError: () => {} });
+  const password = randomBytes(12).toString('hex'); // throwaway local server: a fresh random password per start, no literal in the repo
+  const pg = new EP({ databaseDir: path.join(dir, 'data'), user: 'sa', password, port, persistent: false, onLog: () => {}, onError: () => {} });
   await pg.initialise();
   await pg.start();
-  const baseUrl = `postgres://sa:sa@localhost:${port}`;
+  const baseUrl = `postgres://sa:${password}@localhost:${port}`;
   return {
     baseUrl,
     async createDb(name: string) {

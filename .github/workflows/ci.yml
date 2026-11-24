@@ -27,7 +27,8 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
+          # a throwaway database that lives for this job only: the password is derived from the run, not a literal
+          POSTGRES_PASSWORD: ci-${{ github.run_id }}-${{ github.run_attempt }}
         ports:
           - 5432:5432
         options: >-
@@ -39,7 +40,7 @@ jobs:
     env:
       # The Postgres integration tests create and drop their own throwaway databases on this server
       # instead of starting an embedded one.
-      SA_TEST_PG_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+      SA_TEST_PG_URL: postgres://postgres:ci-${{ github.run_id }}-${{ github.run_attempt }}@127.0.0.1:5432/postgres
 
     steps:
       - uses: actions/checkout@v4
