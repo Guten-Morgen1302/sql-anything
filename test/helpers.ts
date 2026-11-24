@@ -113,6 +113,41 @@ export async function seedPg(url: string, opts: { indexed?: boolean; orders?: nu
 
 /** Real Postgres without Docker. */
 export async function startPg(): Promise<{ baseUrl: string; createDb(name: string): Promise<string>; stop(): Promise<void> }> {
+  // CI (and anyone with a Postgres already running) sets SA_TEST_PG_URL to a superuser URL, e.g.
+  // postgres://postgres:postgres@localhost:5432/postgres. Tests then create their own throwaway databases on that server
+  // instead of starting an embedded one.
+  const external = process.env.SA_TEST_PG_URL;
+  if (external) {
+    const u = new URL(external);
+    const baseUrl = `${u.protocol}//${u.username}${u.password ? ':' + u.password : ''}@${u.host}`;
+    const pg: any = (await import('pg')).default;
+    const created: string[] = [];
+    const withAdmin = async (fn: (c: any) => Promise<void>) => {
+      const c = new pg.Client({ connectionString: `${baseUrl}/postgres` });
+      await c.connect();
+      try {
+        await fn(c);
+      } finally {
+        await c.end();
+      }
+    };
+    return {
+      baseUrl,
+      async createDb(name: string) {
+        await withAdmin(async (c) => {
+          await c.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);
+          await c.query(`CREATE DATABASE "${name}"`);
+        });
+        created.push(name);
+        return `${baseUrl}/${name}`;
+      },
+      async stop() {
+        await withAdmin(async (c) => {
+          for (const n of created) await c.query(`DROP DATABASE IF EXISTS "${n}" WITH (FORCE)`).catch(() => {});
+        }).catch(() => {});
+      },
+    };
+  }
   const EP: any = (await import('embedded-postgres')).default;
   const port = await freePort();
   const dir = tmpDir('sa-pg-');

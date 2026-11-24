@@ -1,5 +1,30 @@
+# dependencies and build output
 node_modules/
 dist/
+
+# sql-anything working data: traces contain real query parameters, never commit them
 .sql-anything/
-.gstack/
+sql-anything-demo/
+*.jsonl
+
+# local environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# databases, packages, logs, editor and OS files
+*.db
+*.sqlite
+*.sqlite3
+*.tgz
 *.log
+pgdata/
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# local assistant / tooling state
+.gstack/

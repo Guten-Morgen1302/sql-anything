@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import type { DbTarget } from '../../src/db/conn.js';
-import { fingerprint } from '../../src/sql/normalize.js';
+import { fingerprint, normalize } from '../../src/sql/normalize.js';
 import { verify, type VerifyResult } from '../../src/verify/verify.js';
 import { rec } from '../helpers.js';
 
@@ -52,6 +52,7 @@ export function defineTraps(label: string, env: TrapEnv): void {
       assert.equal(r.exitCode, 2);
       assert.equal(gate(r, 'parity').status, 'fail');
       assert.match(r.mismatches[0].reason, /row count/);
+      assert.equal(r.mismatches[0].sql, normalize(patched), 'result files carry normalized SQL (no literal values), never the raw text');
     });
 
     it('LEFT JOIN -> INNER JOIN drift drops the customers without orders', async () => {

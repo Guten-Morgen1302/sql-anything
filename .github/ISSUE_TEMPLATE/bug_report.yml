@@ -1,0 +1,82 @@
+name: Bug report
+description: Something is wrong: a crash, a wrong finding, a patch wrongly accepted or rejected, a hook that breaks an app
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not paste traces, `.sql-anything/` files, connection strings or real data.** Traces contain real query parameters.
+        Normalized SQL (values shown as `?`), the report/card, and gate output are safe to share.
+        A security problem? Do not file it here: see SECURITY.md.
+  - type: dropdown
+    id: kind
+    attributes:
+      label: What kind of problem is it?
+      options:
+        - A patch was ACCEPTED that is wrong or slower (most serious)
+        - A good patch was REJECTED (false reject)
+        - A finding is wrong, missing, or attributed to the wrong file:line
+        - "Exit code 4: nothing captured / hook did not load"
+        - The hook broke or slowed my app
+        - Crash or confusing error
+        - Docs / other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: sql-anything version
+      placeholder: "0.1.0 (npm ls sql-anything) or the commit"
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Node.js version and OS
+      placeholder: "v24.10.0, Windows 11 / Ubuntu 24.04 / macOS 15"
+    validations:
+      required: true
+  - type: input
+    id: db
+    attributes:
+      label: Database, driver and ORM
+      placeholder: "Postgres 16 + pg 8.13 + Sequelize 6 / SQLite via better-sqlite3 + Drizzle / Prisma 7 + adapter-pg"
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command you ran
+      render: shell
+      placeholder: "npx sql-anything go --db ... --agent claude --hit ... -- node server.js"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: What happened
+      description: Include the exit code and the gate output (the `[PASS]`/`[FAIL]` lines). For a wrong accept or reject, include the normalized SQL (values as `?`) of the query involved and the patch.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Minimal reproduction
+      description: A tiny app + schema (a few rows is fine) that shows it. This is what gets bugs fixed.
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I removed parameter values, connection strings and secrets from everything I pasted
+          required: true
+        - label: I ran against a development database, not production
+          required: true

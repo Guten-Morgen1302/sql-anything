@@ -1,0 +1,50 @@
+name: Driver / database request
+description: Ask for support for a database client library, ORM, or engine (mysql2, postgres.js, slonik, MySQL, ...)
+title: "driver: "
+labels: ["driver-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        sql-anything captures `pg`, `better-sqlite3` and `node:sqlite` today. Please read "Adding a driver hook" in CONTRIBUTING.md:
+        a **new client for Postgres or SQLite** needs only a hook, while a **new engine** (MySQL, ...) also needs cloning, replay
+        and `EXPLAIN` support, so it is a bigger design discussion.
+  - type: input
+    id: driver
+    attributes:
+      label: Driver or ORM
+      placeholder: "postgres.js 3.x / mysql2 3.x / slonik / TypeORM over mysql2"
+    validations:
+      required: true
+  - type: dropdown
+    id: engine
+    attributes:
+      label: Database engine
+      options:
+        - PostgreSQL (hook only)
+        - SQLite (hook only)
+        - MySQL / MariaDB (new engine)
+        - Other (new engine)
+    validations:
+      required: true
+  - type: textarea
+    id: how
+    attributes:
+      label: How does your app connect and issue queries?
+      description: The smallest snippet showing the client being created and a query being run. Remove credentials.
+      render: javascript
+    validations:
+      required: true
+  - type: textarea
+    id: why
+    attributes:
+      label: Why this one?
+      description: How many apps use it, and what happens today (exit code 4 "0 queries captured"? something else?).
+  - type: dropdown
+    id: help
+    attributes:
+      label: Can you help build it?
+      options:
+        - "Yes, I can open a PR"
+        - "I can test a branch"
+        - "No, just requesting"

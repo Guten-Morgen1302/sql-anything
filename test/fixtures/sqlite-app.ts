@@ -21,8 +21,8 @@ function customers(region = 'r1'): unknown[] {
 }
 
 const body = () => JSON.stringify({ generatedAt: Date.now(), customers: customers() });
-// cmd-all: eight regions per run, so SQL time dominates process start-up and a real N+1 win is measurable by wall time
-const bodyAll = () => JSON.stringify({ generatedAt: Date.now(), regions: Array.from({ length: 8 }, (_, i) => customers('r' + (i + 1))) });
+// cmd-all: twenty regions per run (about 1,000 queries): SQL time must dominate the ~0.3 s Node start-up, or the speed gate flaps, so SQL time dominates process start-up and a real N+1 win is measurable by wall time
+const bodyAll = () => JSON.stringify({ generatedAt: Date.now(), regions: Array.from({ length: 20 }, (_, i) => customers('r' + (i % 10))) }); // test data has regions r0..r9, 50 customers each
 
 if (process.argv[2] === 'cmd') {
   console.log(body());

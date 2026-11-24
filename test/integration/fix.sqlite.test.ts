@@ -130,7 +130,7 @@ describe('fix: agent loop (scripted agent), gated by verify, git-revertable', ()
     assert.equal(r.attempts.length, 1, JSON.stringify(r.attempts));
     assert.equal(r.record!.via, 'agent');
     assert.deepEqual(r.record!.changedFiles, ['server.mjs']);
-    assert.deepEqual(r.record!.check!.queriesPerRun, { baseline: 408, patched: 8 });
+    assert.deepEqual(r.record!.check!.queriesPerRun, { baseline: 1020, patched: 20 });
     assert.equal(r.record!.check!.verdict, 'PASS');
     const patch = path.join(r.dir!, 'fix.patch');
     assert.match(fs.readFileSync(patch, 'utf8'), /-const VARIANT: string = 'N1';|\+const VARIANT = 'FIXED';/);
@@ -156,7 +156,7 @@ describe('fix: agent loop (scripted agent), gated by verify, git-revertable', ()
 
     const rep = writeReport({ runDir: s.dir, projectRoot: project });
     const svg = fs.readFileSync(rep.cards[0].file, 'utf8');
-    assert.ok(svg.includes('408 → 8 per run') && svg.includes('endpoint wall time') && /\d\/\d runs · output parity/.test(svg));
+    assert.ok(svg.includes('1020 → 20 per run') && svg.includes('endpoint wall time') && /\d\/\d runs · output parity/.test(svg));
     assert.match(rep.markdown, /git apply -R fix\.patch/);
     delete process.env.SA_FAKE_LOG;
   });

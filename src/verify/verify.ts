@@ -2,7 +2,7 @@
 import { type Conn, type DbTarget, openConn } from '../db/conn.js';
 import { makeShadows } from '../db/shadow.js';
 import { isIntrospection, isNoise, isVolatile, kindOf, topLevel } from '../sql/classify.js';
-import { fingerprint } from '../sql/normalize.js';
+import { fingerprint, normalize } from '../sql/normalize.js';
 import { bootstrapRatio, median, mulberry32, percentile, type RatioCI } from '../stats.js';
 import { decodeParams, hasUnverifiable } from '../trace/params.js';
 import type { TraceRecord } from '../trace/types.js';
@@ -193,12 +193,14 @@ export async function verify(o: VerifyOptions): Promise<VerifyResult> {
         continue;
       }
       if (ra2.err || rb.err) {
-        base.mismatches.push({ fingerprint: inp.fp, sql: inp.patchedSql, reason: `error on one side only: baseline=${ra2.err ?? 'ok'} patched=${rb.err ?? 'ok'}` });
+        base.mismatches.push({ fingerprint: inp.fp, sql: normalize(inp.patchedSql).slice(0, 400), // normalized: ORMs inline values into SQL text, and result files must not carry them
+           reason: `error on one side only: baseline=${ra2.err ?? 'ok'} patched=${rb.err ?? 'ok'}` });
         continue;
       }
       const p = compare(digest(ra2.r!), digest(rb.r!), inp.ordered);
       if (p.ok) verifiedInputs.push(inp);
-      else base.mismatches.push({ fingerprint: inp.fp, sql: inp.patchedSql, reason: p.reason });
+      else base.mismatches.push({ fingerprint: inp.fp, sql: normalize(inp.patchedSql).slice(0, 400), // normalized: ORMs inline values into SQL text, and result files must not carry them
+           reason: p.reason });
     }
     base.verified = verifiedInputs.length;
     const parity: GateResult = {
