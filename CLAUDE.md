@@ -1,36 +1,71 @@
-## gstack
+# sql-anything: repository conventions
 
-Use the /browse skill from gstack for all web browsing. Never use mcp__claude-in-chrome__* tools.
+For contributors and coding agents. Human-oriented detail is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
-## Documentation must change with the code (standing rule)
+sql-anything finds slow SQL in a running Node app (N+1 loops, missing indexes, selective scans), fixes it with a deterministic
+index generator or an agent, and refuses any fix it cannot replay-verify on database clones. TypeScript, Node 22.13+, ESM.
 
-Any commit or PR that adds, removes or changes a **CLI command, a flag, an exit code, an MCP tool, a supported driver or stack, a
-gate threshold, or a benchmark result** MUST update all three of these in the **same commit**, before you finish:
+## Commands
+
+```bash
+npm ci
+npm run build                    # tsc -> dist/ (src/ -> dist/src, test/ -> dist/test)
+npm run test:unit                # about 1 s: pure logic and the documentation drift guard
+npm run test:sqlite              # build + unit + SQLite integration (hook, scan, verify, trap suite, fix loop, MCP)
+npm run test:integration:pg      # Postgres integration (trap suite on Postgres, scan, Prisma 7, examples)
+npm test                         # everything: about 10 to 12 minutes
+npm run check:pack               # fails if the npm tarball would contain anything it should not
+node dist/src/cli.js --help      # the CLI from a checkout
+```
+
+Postgres tests start an embedded Postgres, or use `SA_TEST_PG_URL=postgres://user:pass@host:5432/postgres` (CI does).
+Integration tests run serially on purpose: they measure timings.
+
+## Architecture map
+
+| Path | Role |
+|---|---|
+| `src/cli.ts` | argument parsing and the `HANDLERS` map (typed against `COMMANDS`); prints results, returns exit codes |
+| `src/meta.ts` | `COMMANDS` and `EXIT`: the public surface the docs describe |
+| `src/api.ts`, `src/go.ts`, `src/demo.ts` | `runScan`, `runVerify`; the `go` pipeline; the synthetic showcase |
+| `src/hook/` | capture hook loaded with `NODE_OPTIONS=--import`: wraps `pg`, `better-sqlite3`, `node:sqlite`; request grouping; kill switch |
+| `src/trace/` | trace record types, typed parameter serialization (Date, BigInt, Buffer), trace reader |
+| `src/sql/` | normalizer and fingerprints, statement classification (noise, volatile functions, ORDER BY/LIMIT) |
+| `src/scan/` | findings (N+1, selective seq scans, correlated subqueries), `EXPLAIN` on a clone |
+| `src/db/` | `Conn` implementations (SQLite, Postgres) and shadow-database cloning |
+| `src/verify/` | **the gate**: parity, interleaved A/B with bootstrap CI, A/A noise floor, regression and write guards; `check.ts` is the end-to-end N+1 check |
+| `src/fix/`, `src/agent.ts` | index candidates, the agent loop in a git worktree, agent process handling |
+| `src/report/` | Markdown PR block and SVG card |
+| `src/mcp.ts` | stdio MCP server |
+| `skills/sql-anything/SKILL.md` | the agent skill |
+| `examples/` | synthetic apps (`sqlite-shop`, `postgres-saas`); the demo ships a copy of `sqlite-shop` |
+| `docs/assets/`, `docs/benchmarks/` | README images; benchmark results (every number in the README comes from here) |
+| `test/integration/traps.ts` | the trap suite: wrong patches that `verify` must reject, run on SQLite and Postgres |
+
+## Hard rule: documentation changes with the code
+
+Any commit or PR that **adds, removes or changes a CLI subcommand, a flag, an exit code, an MCP tool, a supported driver or stack,
+a gate threshold, or a benchmark result** MUST update all three of these in the **same commit**:
 
 1. `README.md`
 2. `skills/sql-anything/SKILL.md`
 3. `CHANGELOG.md`
 
-How the rule is enforced: `test/unit/readme-sync.test.ts` (part of `npm test` and CI) fails when
-- a subcommand in `src/meta.ts` (`COMMANDS`) is missing from the README CLI table, or the README documents one that does not exist;
-- a flag the parser in `src/cli.ts` accepts is not mentioned in `README.md`, or a flag in `README.md`, `--help` or `SKILL.md` does not exist;
-- an MCP tool registered by `src/mcp.ts` is missing from the README tool table or `SKILL.md`;
-- the exit codes in `src/meta.ts` (`EXIT`) differ from the README table, `--help`, or `SKILL.md`;
-- a relative link, image or in-page anchor in the docs does not resolve;
-- a speedup or `N/N` count quoted in `README.md` does not appear in a file under `docs/benchmarks/`.
+`test/unit/readme-sync.test.ts` (part of `npm test` and CI) enforces the checkable part: commands in `src/meta.ts` against the README
+table and `--help`; every flag the parser accepts against the README (and no invented flags in the README, `--help` or `SKILL.md`);
+registered MCP tools against the README and `SKILL.md`; exit codes in `EXIT` against the README, `--help` and `SKILL.md`; README images
+(raw GitHub URLs into `docs/assets/`) and relative links exist; every speedup and `N/N` count in the README appears in a file under
+`docs/benchmarks/` or `docs/assets/`.
 
-So: change the code, change the docs, run `npm test`. Do not edit the test to make it pass, loosen it, or delete a check; if a check is
-wrong, fix it in its own commit and say why. A new command goes in `COMMANDS` and in the `HANDLERS` map in `src/cli.ts` (it does
-not compile otherwise). A new exit code goes in `EXIT`.
+Do not edit that test to make it pass. A new command goes in `COMMANDS` and in `HANDLERS` (it does not compile otherwise); a new
+exit code goes in `EXIT`. Never invent, round up or estimate a number in the docs: record the artifact first, then quote it, and say
+what was not tested.
 
-README rules: every command, flag, exit code and number must be checked against the real CLI (`node dist/src/cli.js --help`) and the real
-files in `docs/benchmarks/`. Never invent, round up, or estimate a number; if a number has no artifact, record the artifact first.
-Say what was not tested. No hype words.
+## Other conventions
 
-## Other standing rules
-
-- Nothing is reported as a win unless it was replay-verified. Do not weaken a gate to make a test pass; add a trap in
-  `test/integration/traps.ts` when you change `src/verify/`.
+- Nothing is reported as a win unless it was replay-verified. Never weaken a gate threshold or comparison to get a test green. A change under
+  `src/verify/` comes with a new or extended trap in `test/integration/traps.ts`.
 - Reports, cards and MCP results carry normalized SQL only: no parameter values, no absolute paths.
-- Do not commit planning docs, `spikes/`, traces, `.env` files or database files (`npm run check:pack` guards the tarball).
-- Do not push or publish unless the user asks.
+- No new runtime dependencies without discussion (currently `pg`, `@modelcontextprotocol/sdk`, `zod`).
+- Keep planning notes, traces, `.env` files, database files and `spikes/` out of the repository. `npm run check:pack` guards the tarball.
+- Pushing, tagging and publishing are the maintainers' job: do not do them unless asked.

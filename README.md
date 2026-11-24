@@ -11,7 +11,7 @@
 
 </div>
 
-![Verified index fix: p50 5.6 ms to 0.41 ms, 13.9x](docs/benchmarks/sqlite-shop/card-index.svg)
+![Verified index fix: p50 5.6 ms to 0.41 ms, 13.9x](https://raw.githubusercontent.com/Guten-Morgen1302/sql-anything/main/docs/assets/card-index.svg)
 
 *`examples/sqlite-shop`, synthetic data (30,000 orders). `sql-anything` picked `CREATE INDEX` on `orders(customer_id)` for an
 unindexed lookup and verified it: p50 5.6 ms to 0.41 ms, 13.9x, **123/123 replayed · row parity**.

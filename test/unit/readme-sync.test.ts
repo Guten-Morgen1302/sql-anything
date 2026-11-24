@@ -129,6 +129,11 @@ describe('README <-> MCP tools', () => {
   });
 });
 
+/** Absolute URL of a file in this repository on the main branch, as used for README images. Capture group 1 = repo-relative path. */
+const RAW = /^https:\/\/raw\.githubusercontent\.com\/Guten-Morgen1302\/sql-anything\/main\/(.+)$/;
+/** Status badges are hosted elsewhere by design (GitHub Actions, shields.io); every other image must be a RAW URL. */
+const BADGE = /^https:\/\/(img\.shields\.io\/|github\.com\/Guten-Morgen1302\/sql-anything\/actions\/workflows\/[^/]+\/badge\.svg)/;
+
 describe('README links and anchors', () => {
   const slug = (h: string) => h.trim().toLowerCase().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-');
   const docs = ['README.md', 'CONTRIBUTING.md', 'SECURITY.md', 'CHANGELOG.md', 'skills/sql-anything/SKILL.md', 'examples/sqlite-shop/README.md', 'examples/postgres-saas/README.md', 'docs/benchmarks/conduit/RESULTS.md', 'docs/benchmarks/sqlite-shop/RESULTS.md'];
@@ -139,12 +144,31 @@ describe('README links and anchors', () => {
       const text = read(doc);
       const targets = [...text.matchAll(/!?\[[^\]]*\]\(([^)\s]+)\)/g)].map((m) => m[1]).concat([...text.matchAll(/(?:src|href)="([^"]+)"/g)].map((m) => m[1]));
       for (const t of targets) {
+        const raw = RAW.exec(t);
+        if (raw) {
+          // absolute raw.githubusercontent.com URLs of THIS repo can only be checked against the checkout
+          if (!fs.existsSync(path.join(REPO, decodeURI(raw[1])))) broken.push(`${doc} -> ${t} (no such file in the repository)`);
+          continue;
+        }
         if (/^(https?:|mailto:|#)/.test(t)) continue;
         const file = path.resolve(path.dirname(path.join(REPO, doc)), decodeURI(t.split('#')[0]));
         if (!fs.existsSync(file)) broken.push(`${doc} -> ${t}`);
       }
     }
     assert.deepEqual(broken, []);
+  });
+
+  it('every image in README.md is a raw.githubusercontent.com URL of this repo under docs/assets/, so it renders on GitHub AND on npm', () => {
+    const all = [...README.matchAll(/!\[[^\]]*\]\(([^)\s]+)\)/g)].map((m) => m[1]).concat([...README.matchAll(/<img[^>]*src="([^"]+)"/g)].map((m) => m[1]));
+    const images = all.filter((i) => !BADGE.test(i));
+    assert.ok(all.length > images.length, 'README lost its status badges');
+    assert.ok(images.length >= 1, 'README has no content image');
+    for (const img of images) {
+      const m = RAW.exec(img);
+      assert.ok(m, `README image is not a raw.githubusercontent.com/Guten-Morgen1302/sql-anything/main/... URL (a relative path breaks on npm): ${img}`);
+      assert.match(m![1], /^docs\/assets\/[^/]+\.(svg|png)$/, `README image must live in docs/assets/: ${img}`);
+      assert.ok(fs.existsSync(path.join(REPO, m![1])), `README image does not exist in the repository: ${m![1]}`);
+    }
   });
 
   it('in-page anchors in README.md point at real headings', () => {
@@ -155,8 +179,9 @@ describe('README links and anchors', () => {
 });
 
 describe('README numbers come from benchmark artifacts', () => {
+  // numbers may come from the written results (docs/benchmarks/**) or from the unedited cards (docs/assets/*.svg)
   const dir = path.join(REPO, 'docs', 'benchmarks');
-  const artifactFiles: string[] = [];
+  const artifactFiles: string[] = fs.readdirSync(path.join(REPO, 'docs', 'assets')).filter((n) => n.endsWith('.svg')).map((n) => path.join(REPO, 'docs', 'assets', n));
   const walk = (d: string) => {
     for (const e of fs.readdirSync(d, { withFileTypes: true })) {
       if (e.isDirectory()) walk(path.join(d, e.name));
@@ -188,14 +213,16 @@ describe('README numbers come from benchmark artifacts', () => {
   });
 
   it('the hero card exists, is the artifact the caption describes, and every card is referenced from a RESULTS.md', () => {
-    const hero = /!\[[^\]]*\]\((docs\/benchmarks\/[^)]+\.svg)\)/.exec(README)?.[1];
-    assert.ok(hero, 'README has no benchmark card image');
+    const heroUrl = [...README.matchAll(/!\[[^\]]*\]\(([^)\s]+\.svg)\)/g)].map((m) => m[1]).find((u) => !BADGE.test(u));
+    assert.ok(heroUrl, 'README has no benchmark card image');
+    const hero = RAW.exec(heroUrl!)?.[1];
+    assert.ok(hero, `the hero image must be a raw.githubusercontent.com URL of this repo: ${heroUrl}`);
     const svg = read(hero!);
     assert.match(svg, /replayed · row parity/);
     assert.ok(README.includes(svg.match(/(\d+\/\d+) replayed · row parity/)![0]), 'the hero caption must quote the card badge verbatim');
-    for (const f of artifactFiles.filter((x) => x.endsWith('.svg'))) {
-      const name = path.basename(f);
-      assert.ok(artifactFiles.some((r) => r.endsWith('.md') && fs.readFileSync(r, 'utf8').includes(name)), `${name} is not referenced by any RESULTS.md`);
+    const mdFiles = artifactFiles.filter((x) => x.endsWith('.md'));
+    for (const f of fs.readdirSync(path.join(REPO, 'docs', 'assets')).filter((x) => x.endsWith('.svg'))) {
+      assert.ok(mdFiles.some((r) => fs.readFileSync(r, 'utf8').includes(f)), `docs/assets/${f} is not referenced by any docs/benchmarks/**/RESULTS.md`);
     }
   });
 });

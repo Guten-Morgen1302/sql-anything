@@ -35,8 +35,9 @@ First release.
   CLI (commands, flags, `--help`), the exit codes, the registered MCP tools, or the files under `docs/benchmarks/` (every quoted speedup and
   `N/N` count must appear in an artifact), or when a relative link, image or anchor in the docs is broken. Commands and exit codes live in
   `src/meta.ts`; the CLI's handler map is typed against them. The standing rule is in `CLAUDE.md`.
-- Benchmark artifacts under `docs/benchmarks/`: the synthetic `sqlite-shop` run with the real `claude` CLI (cards and numbers), the
-  `postgres-saas` test record, and the `conduit` real-app log.
+- Benchmark artifacts: the synthetic `sqlite-shop` run with the real `claude` CLI (numbers in `docs/benchmarks/sqlite-shop/`, cards in
+  `docs/assets/`), the `postgres-saas` test record, and the `conduit` real-app log. README images are raw GitHub URLs into `docs/assets/`
+  so they render on GitHub and on npm.
 - Test suite including a **trap suite** that proves the gate rejects wrong patches on SQLite and real Postgres.
 
 ### Known limitations

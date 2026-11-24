@@ -17,8 +17,8 @@ end. The numbers below are copied from the run's own `patch.json` files; the car
 
 | Fix | Card |
 |---|---|
-| F1: index on `orders(customer_id)` | [card-index.svg](card-index.svg) |
-| F2: the N+1 loop rewritten by `claude` | [card-n1-claude.svg](card-n1-claude.svg) |
+| F1: index on `orders(customer_id)` | [card-index.svg](../../assets/card-index.svg) |
+| F2: the N+1 loop rewritten by `claude` | [card-n1-claude.svg](../../assets/card-n1-claude.svg) |
 
 ## F1: deterministic index (no LLM)
 

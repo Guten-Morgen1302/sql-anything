@@ -18,7 +18,10 @@ const agent = (mode: string) => {
   return { name: 'fake', cmd: [process.execPath, path.join(FIXTURES, 'fake-agent.js')] };
 };
 const git = (cwd: string, ...a: string[]) => spawnSync('git', a, { cwd, encoding: 'utf8' });
-const CHECK_CMD = { checkCmd: [process.execPath, 'server.mjs', 'cmd-all'], reps: 8 };
+// These tests are about the agent loop (feedback, rollback, isolation), not about the speed gate (the trap suite pins that). They use the
+// interleaved --check-url path: both servers stay up and each request takes ~0.1 s, so an attempt costs seconds. A one-shot command
+// workload pays a Node start-up per run, takes minutes per attempt, and is the slowest, most load-sensitive way to measure.
+const CHECK_CMD = { runCmd: [process.execPath, 'server.mjs'], checkUrl: 'http://127.0.0.1:{port}/', reps: 8 };
 
 /** A real git project: the fixture app as server.mjs, node_modules linked, one commit. */
 function makeProject(): string {
@@ -130,7 +133,7 @@ describe('fix: agent loop (scripted agent), gated by verify, git-revertable', ()
     assert.equal(r.attempts.length, 1, JSON.stringify(r.attempts));
     assert.equal(r.record!.via, 'agent');
     assert.deepEqual(r.record!.changedFiles, ['server.mjs']);
-    assert.deepEqual(r.record!.check!.queriesPerRun, { baseline: 1020, patched: 20 });
+    assert.deepEqual(r.record!.check!.queriesPerRun, { baseline: 51, patched: 1 });
     assert.equal(r.record!.check!.verdict, 'PASS');
     const patch = path.join(r.dir!, 'fix.patch');
     assert.match(fs.readFileSync(patch, 'utf8'), /-const VARIANT: string = 'N1';|\+const VARIANT = 'FIXED';/);
@@ -156,7 +159,7 @@ describe('fix: agent loop (scripted agent), gated by verify, git-revertable', ()
 
     const rep = writeReport({ runDir: s.dir, projectRoot: project });
     const svg = fs.readFileSync(rep.cards[0].file, 'utf8');
-    assert.ok(svg.includes('1020 → 20 per run') && svg.includes('endpoint wall time') && /\d\/\d runs · output parity/.test(svg));
+    assert.ok(svg.includes('51 → 1 per run') && svg.includes('endpoint wall time') && /\d\/\d runs · output parity/.test(svg));
     assert.match(rep.markdown, /git apply -R fix\.patch/);
     delete process.env.SA_FAKE_LOG;
   });
@@ -169,11 +172,11 @@ describe('fix: agent loop (scripted agent), gated by verify, git-revertable', ()
     process.env.SA_FAKE_LOG = log;
     const r = await fix({ runDir: s.dir, findingId: n1.id, db: dbFile, projectDir: project, agent: agent('broken-then-fixed'), deterministic: false, check: CHECK_CMD, seed: 7 });
     assert.equal(r.status, 'verified', JSON.stringify(r.attempts));
-    assert.deepEqual(r.attempts.map((a) => a.outcome), ['rejected', 'verified']);
-    assert.match(r.attempts[0].failed.join(' '), /parity gate failed.*output differs at \$\.regions/);
+    assert.deepEqual(r.attempts.map((a) => a.outcome), ['rejected', 'verified'], JSON.stringify(r.attempts.map((a) => ({ o: a.outcome, why: a.failed }))));
+    assert.match(r.attempts[0].failed.join(' '), /parity gate failed.*output differs at \$\.customers/);
     const second = fs.readFileSync(path.join(log, 'prompt-2.txt'), 'utf8');
     assert.match(second, /previous attempt was REJECTED/);
-    assert.match(second, /output differs at \$\.regions/);
+    assert.match(second, /output differs at \$\.customers/);
     assert.equal(git(project, 'worktree', 'list').stdout.trim().split('\n').length, 1);
     assert.equal(git(project, 'status', '--porcelain').stdout.trim(), '');
     delete process.env.SA_FAKE_LOG;
