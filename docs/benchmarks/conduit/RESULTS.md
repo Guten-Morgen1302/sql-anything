@@ -14,23 +14,23 @@ Local run, nothing uploaded, no upstream PRs. This is a log of what happened, in
 
 ```
 captured 2,176 statements, 34 transaction/health-check/schema-introspection statements ignored
-F1  slow-query           5 calls   1,312 ms total   article listing (ORDER BY createdAt DESC + tag/author joins) at controllers/articles.js:54
-F2  correlated-subquery  2 calls     842 ms total   same listing with an author filter, plan re-runs a subplan per row
-F3  slow-query           5 calls     815 ms total   count(*) over the same joins (pagination total)
+F1  slow-query           5 calls   1,312 ms total   issued at controllers/articles.js:54 (the article listing)
+F2  correlated-subquery  2 calls     842 ms total   plan re-runs a subplan per row (Postgres reported a SubPlan node with 100+ loops)
+F3  slow-query           5 calls     815 ms total
 F4  seq-scan             2 calls     278 ms total
-F5  n+1                350 calls     295 ms total   50 identical lookups per request, helper/helpers.js (favorites count per article)
-F8  n+1                350 calls     251 ms total   50 identical lookups per request, helper/helpers.js (follower count per article)
+F5  n+1                350 calls     295 ms total   50 lookups per request, 7 requests
+F8  n+1                350 calls     251 ms total   50 lookups per request, 7 requests
 ```
 
 Sequelize inlines values into the SQL text and sends no bind parameters. The first version of the N+1 detector judged by bind
 params and **missed all of these**; it now keys on the statement text as well (regression test:
-`test/unit/analyze.test.ts`). Findings F3 to F9 on the first scan were 50-lookup loops at four distinct call sites in `helpers.js`.
+`test/unit/analyze.test.ts`). The first scan with the corrected detector reported six N+1 findings, each 50 lookups per request, issued from `controllers/articles.js` and `helper/helpers.js` (the eager-loading helpers `appendTagList`, `appendFavorites`, `appendFollowers`).
 
 ## Fixes: nothing verified, and why
 
 | Attempt | Result | Reason (from the gate's own output) |
 |---|---|---|
-| Generated index candidates for F1, F2 | **rejected** | speed 0.99x, 1.10x, 0.98x (95% CI lower bound 0.90x to 0.96x, n=30; need 1.5x). The generator proposed weak indexes (`Tags(name)`, `Articles(id, userId)`); the gate refused them instead of letting a slow-neutral index through |
+| Generated index candidates for F1, F2 | **rejected** | speed 0.99x (95% CI lower bound 0.90x), 1.10x (lower bound 0.96x) for F1, and 0.98x (lower bound 0.95x) for F2; n=30 each, need a lower bound of 1.5x. The generator proposed weak indexes (`Tags(name)`, `Articles(id, userId)`); the gate refused them instead of letting a slow-neutral index through |
 | Hand-written indexes on `Articles(createdAt DESC)`, `TagList(tagName)`, `Articles(userId)` through `fix --migration` | **rejected** | parity: 498 of 500 replayed inputs identical. 2 mismatches: *same rows, different order*. conduit's listing orders by `createdAt` but joins tags, so one article appears once per tag; the SQL does not pin the order of those rows, and a new plan changes it, which changes the order of `tagList` in the JSON |
 | Real `claude` CLI on the N+1 / listing code (2 attempts, end-to-end check) | **rejected** | parity on the JSON output: `$.articles[12].tagList[0]`: baseline `"tag8"` vs patched `"tag25"`. Same cause: tag order inside an article is whatever the heap returned. The agent was told and did not converge in 2 attempts |
 
@@ -47,7 +47,7 @@ introspection queries are now excluded from parity and from findings (`isIntrosp
 
 ## What this run does not show
 
-- No verified speedup on a real application. The reproducible, synthetic examples do (see `docs/assets/` and the README), the real app did not.
+- No verified speedup on a real application. The reproducible, synthetic examples do (see [../sqlite-shop/RESULTS.md](../sqlite-shop/RESULTS.md) and the README), the real app did not.
 - One app, one reference implementation, one database size. Not a survey.
 - The second candidate app (`tanem/express-bookshelf-realworld-example-app`) was not run.
 - Timings are from a laptop with an embedded Postgres build and include the capture hook's overhead.

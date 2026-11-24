@@ -5,6 +5,7 @@ import path from 'node:path';
 import { parseArgs } from 'node:util';
 import { resolveAgent } from './agent.js';
 import { loadFindings, runScan, runVerify, shellSplit, UsageError } from './api.js';
+import { COMMANDS, EXIT, type Command } from './meta.js';
 import { latestRunDir } from './capture.js';
 import { muteSqliteWarning, parseTarget } from './db/conn.js';
 import { fix } from './fix/fix.js';
@@ -236,7 +237,7 @@ async function cmdFix(argv: string[]): Promise<number> {
     if (r.record?.migrationSql) console.log(`\nmigration (apply it yourself):\n  ${r.record.migrationSql}\nrollback:\n  ${r.record.downSql}`);
     if (r.record?.patchFile) console.log(`\napply:    git apply ${path.join(r.dir!, r.record.patchFile)}\nrollback: git apply -R ${path.join(r.dir!, r.record.patchFile)}`);
   }
-  return r.status === 'verified' ? 0 : r.status === 'rejected' ? 2 : 4;
+  return r.status === 'verified' ? EXIT.OK : r.status === 'rejected' ? EXIT.REJECTED : EXIT.UNVERIFIABLE;
 }
 
 async function cmdGo(argv: string[]): Promise<number> {
@@ -294,10 +295,10 @@ async function cmdReport(argv: string[]): Promise<number> {
   const r = writeReport({ runDir: dir, ids: values.fix, outDir: values.out, label: values.label });
   if (!r.cards.length) {
     console.log('no verified fixes in this run yet: run `sql-anything fix <F1> --db ...` or `sql-anything go` first.');
-    return 4;
+    return EXIT.UNVERIFIABLE;
   }
   for (const f of r.files) console.log(f);
-  return 0;
+  return EXIT.OK;
 }
 
 async function cmdDemo(argv: string[]): Promise<number> {
@@ -312,43 +313,40 @@ done in ${r.seconds.toFixed(1)}s (exit ${r.exitCode})`);
   return r.exitCode;
 }
 
+/** One handler per command. Typed against COMMANDS: adding a command without a handler (or the reverse) does not compile. */
+const HANDLERS: Record<Command, (rest: string[]) => Promise<number>> = {
+  go: cmdGo,
+  scan: cmdScan,
+  fix: cmdFix,
+  verify: (r) => cmdVerify(r, false),
+  bench: (r) => cmdVerify(r, true),
+  report: cmdReport,
+  demo: cmdDemo,
+  mcp: async () => {
+    const { serveStdio } = await import('./mcp.js');
+    await serveStdio();
+    return await new Promise<number>(() => {}); // the stdio server runs until the client closes the pipe
+  },
+};
+
 async function main(): Promise<number> {
   muteSqliteWarning();
   const [cmd, ...rest] = process.argv.slice(2);
   try {
-    switch (cmd) {
-      case 'scan':
-        return await cmdScan(rest);
-      case 'verify':
-        return await cmdVerify(rest, false);
-      case 'bench':
-        return await cmdVerify(rest, true);
-      case 'fix':
-        return await cmdFix(rest);
-      case 'go':
-        return await cmdGo(rest);
-      case 'report':
-        return await cmdReport(rest);
-      case 'mcp': {
-        const { serveStdio } = await import('./mcp.js');
-        await serveStdio();
-        return await new Promise<number>(() => {}); // the stdio server runs until the client closes the pipe
-      }
-      case 'demo':
-        return await cmdDemo(rest);
-      case undefined:
-      case '-h':
-      case '--help':
-      case 'help':
-        console.log(USAGE);
-        return cmd === undefined ? 3 : 0;
-      default:
-        err(`unknown command "${cmd}"\n\n${USAGE}`);
-        return 3;
+    if (cmd === undefined || cmd === '-h' || cmd === '--help' || cmd === 'help') {
+      console.log(USAGE);
+      return cmd === undefined ? EXIT.USAGE : EXIT.OK;
     }
+    if (!(COMMANDS as readonly string[]).includes(cmd)) {
+      err(`unknown command "${cmd}"
+
+${USAGE}`);
+      return EXIT.USAGE;
+    }
+    return await HANDLERS[cmd as Command](rest);
   } catch (e: any) {
     err(`error: ${e?.message ?? e}`);
-    return 3;
+    return EXIT.USAGE;
   }
 }
 

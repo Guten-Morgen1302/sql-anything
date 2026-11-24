@@ -7,6 +7,7 @@ import { bootstrapRatio, median, mulberry32, percentile, type RatioCI } from '..
 import { decodeParams, hasUnverifiable } from '../trace/params.js';
 import type { TraceRecord } from '../trace/types.js';
 import { explainOn } from '../scan/explain.js';
+import { verdictExit } from '../meta.js';
 import { compare, digest } from './canonical.js';
 
 export interface VerifyOptions {
@@ -158,7 +159,7 @@ export async function verify(o: VerifyOptions): Promise<VerifyResult> {
   };
   const finish = (verdict: Verdict, gates: GateResult[], extra: Partial<VerifyResult> = {}): VerifyResult => {
     base.unverifiable.count = Object.values(unverifiable).reduce((a, b) => a + b, 0);
-    return { ...base, verdict, exitCode: verdict === 'PASS' ? 0 : verdict === 'REJECT' ? 2 : 4, gates, ...extra };
+    return { ...base, verdict, exitCode: verdictExit(verdict), gates, ...extra };
   };
 
   if (!targetInputs.length) {

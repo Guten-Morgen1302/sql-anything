@@ -6,6 +6,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { freePort } from './capture.js';
 import { go, type GoOutcome } from './go.js';
+import { EXIT } from './meta.js';
 import { fmtMs, fmtX } from './report/card.js';
 
 export interface DemoOptions {
@@ -86,7 +87,7 @@ export async function demo(o: DemoOptions = {}): Promise<DemoOutcome> {
     });
     if (r.error || !r.dir) {
       step(`stopped: ${r.error ?? 'nothing captured'}`);
-      return { exitCode: 4, seconds: (performance.now() - t0) / 1000, go: r, files: [], notes };
+      return { exitCode: EXIT.UNVERIFIABLE, seconds: (performance.now() - t0) / 1000, go: r, files: [], notes };
     }
     step(`found ${r.findings.length} finding(s); fixed ${r.fixes.filter((f) => f.status === 'verified').length} of ${r.fixes.length} that were attempted`);
     for (const f of r.fixes) {

@@ -14,7 +14,7 @@
 - [ ] I did **not** weaken a gate threshold, loosen a comparison or skip a test to get green
 - [ ] No parameter values or absolute paths can reach a report, card or MCP result
 - [ ] `npm run check:pack` passes; I did not add traces, `.env`, database files, planning notes or `spikes/`
-- [ ] `CHANGELOG.md` updated for user-visible changes
+- [ ] If I added or changed a command, flag, exit code, MCP tool, supported driver, gate threshold or benchmark number: `README.md`, `skills/sql-anything/SKILL.md` and `CHANGELOG.md` are updated in this PR (`test/unit/readme-sync.test.ts` checks the first two)
 - [ ] New driver hook: it handles every calling convention, never changes the app's results or errors, and has an end-to-end fixture test (see CONTRIBUTING.md)
 
 ## Notes for the reviewer

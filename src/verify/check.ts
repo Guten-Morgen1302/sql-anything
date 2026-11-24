@@ -8,6 +8,7 @@ import { makeShadows } from '../db/shadow.js';
 import { isNoise } from '../sql/classify.js';
 import { bootstrapRatio, median, mulberry32, percentile, type RatioCI } from '../stats.js';
 import { readTrace } from '../trace/read.js';
+import { verdictExit } from '../meta.js';
 import type { GateResult, Verdict } from './verify.js';
 
 export interface CheckOptions {
@@ -197,7 +198,7 @@ export async function check(o: CheckOptions): Promise<CheckResult> {
   const warnings: string[] = [];
   const empty = (verdict: Verdict, reason: string, gates: GateResult[] = []): CheckResult => ({
     verdict,
-    exitCode: verdict === 'PASS' ? 0 : verdict === 'REJECT' ? 2 : 4,
+    exitCode: verdictExit(verdict),
     gates,
     queriesPerRun: { baseline: NaN, patched: NaN },
     wall: { baselineP50Ms: NaN, baselineP95Ms: NaN, patchedP50Ms: NaN, patchedP95Ms: NaN, speedup: { point: NaN, lo: NaN, hi: NaN, n: 0 } },
@@ -274,7 +275,7 @@ export async function check(o: CheckOptions): Promise<CheckResult> {
     const verdict: Verdict = gates.some((g) => g.status === 'fail') ? 'REJECT' : 'PASS';
     return {
       verdict,
-      exitCode: verdict === 'PASS' ? 0 : 2,
+      exitCode: verdictExit(verdict),
       gates,
       queriesPerRun: { baseline: qb, patched: qp },
       wall: { baselineP50Ms: r3(median(base.times)), baselineP95Ms: r3(percentile(base.times, 95)), patchedP50Ms: r3(median(patched.times)), patchedP95Ms: r3(percentile(patched.times, 95)), speedup },

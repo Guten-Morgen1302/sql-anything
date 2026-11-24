@@ -3,6 +3,7 @@ import type { AgentSpec } from './agent.js';
 import { runScan, UsageError } from './api.js';
 import { fix, type FixOptions } from './fix/fix.js';
 import type { FixResult } from './fix/types.js';
+import { EXIT } from './meta.js';
 import type { Finding } from './scan/analyze.js';
 import { writeReport, type ReportOutcome } from './report/report.js';
 import type { CheckOptions } from './verify/check.js';
@@ -55,12 +56,12 @@ export async function go(o: GoOptions): Promise<GoOutcome> {
   if (process.env.SQL_ANYTHING_DISABLE === '1') throw new UsageError('SQL_ANYTHING_DISABLE=1 is set: sql-anything is switched off, nothing was run');
   const log = o.log ?? (() => {});
   const plan = goPlan(o);
-  if (o.dryRun) return { exitCode: 0, plan, findings: [], fixes: [] };
+  if (o.dryRun) return { exitCode: EXIT.OK, plan, findings: [], fixes: [] };
 
   const scan = await runScan({ db: o.db, cmd: o.cmd, cwd: o.cwd, hits: o.hits, hitRepeat: o.hitRepeat, duration: o.duration, env: o.env, allowRemote: o.allowRemote, log });
-  if (scan.exitCode !== 0 || !scan.report) return { exitCode: 4, dir: scan.dir, plan, findings: [], fixes: [], error: scan.error };
+  if (scan.exitCode !== 0 || !scan.report) return { exitCode: EXIT.UNVERIFIABLE, dir: scan.dir, plan, findings: [], fixes: [], error: scan.error };
   const findings = scan.report.findings;
-  if (!findings.length) return { exitCode: 0, dir: scan.dir, plan, findings, fixes: [] };
+  if (!findings.length) return { exitCode: EXIT.OK, dir: scan.dir, plan, findings, fixes: [] };
 
   // Ranked order, one fix per finding. An N+1 and its sequential scan can be the same statement: the scan gets an index,
   // the N+1 gets a code change (when an agent is available) and is measured end to end.
@@ -89,6 +90,6 @@ export async function go(o: GoOptions): Promise<GoOutcome> {
   }
   const ok = fixes.filter((x) => x.status === 'verified');
   const report = ok.length ? writeReport({ runDir: scan.dir, ids: ok.map((x) => x.findingId), label: o.label, projectRoot: path.resolve(o.cwd ?? process.cwd()) }) : undefined;
-  const exitCode: GoOutcome['exitCode'] = ok.length ? 0 : fixes.some((x) => x.status === 'rejected') ? 2 : 4;
+  const exitCode: GoOutcome['exitCode'] = ok.length ? EXIT.OK : fixes.some((x) => x.status === 'rejected') ? EXIT.REJECTED : EXIT.UNVERIFIABLE;
   return { exitCode, dir: scan.dir, plan, findings, fixes, report };
 }

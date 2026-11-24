@@ -53,6 +53,14 @@ definitions (`traps.sqlite.test.ts`, `traps.pg.test.ts`).
 **If you change anything under `src/verify/`, add or extend a trap.** A change that makes `verify` accept more must come with a
 case that shows it still rejects the wrong thing.
 
+## Documentation is part of the change
+
+A change to a **command, flag, exit code, MCP tool, supported driver, gate threshold or benchmark result** updates `README.md`,
+`skills/sql-anything/SKILL.md` and `CHANGELOG.md` in the same commit. `test/unit/readme-sync.test.ts` fails `npm test` (and CI) when the README
+or the skill drifts from the CLI's `--help`, the parser's flags, `src/meta.ts` (`COMMANDS`, `EXIT`), the registered MCP tools, or the files under
+`docs/benchmarks/`, and when a relative link or image is broken. Every number in the README must come from a file under `docs/benchmarks/`:
+record the artifact first, then quote it. The README says what was not tested.
+
 ## Pull requests
 
 - Keep a PR to one change. Describe the user-visible behaviour and how you tested it.

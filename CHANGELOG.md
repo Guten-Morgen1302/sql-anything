@@ -31,7 +31,13 @@ First release.
 - **`demo`**: a zero-config, zero-Docker showcase on a synthetic SQLite shop (about 15 seconds).
 - **`mcp`**: stdio MCP server with `scan`, `verify`, `verify_workload`, `fix` and `report`. Agent skill in `skills/sql-anything/SKILL.md`.
 - **Examples** (synthetic, labeled): `examples/sqlite-shop` and `examples/postgres-saas`.
-- Test suite of 134 tests, including a **trap suite** that proves the gate rejects wrong patches on SQLite and real Postgres.
+- **Documentation drift guard** (`test/unit/readme-sync.test.ts`, part of `npm test`): fails when the README or `SKILL.md` disagree with the
+  CLI (commands, flags, `--help`), the exit codes, the registered MCP tools, or the files under `docs/benchmarks/` (every quoted speedup and
+  `N/N` count must appear in an artifact), or when a relative link, image or anchor in the docs is broken. Commands and exit codes live in
+  `src/meta.ts`; the CLI's handler map is typed against them. The standing rule is in `CLAUDE.md`.
+- Benchmark artifacts under `docs/benchmarks/`: the synthetic `sqlite-shop` run with the real `claude` CLI (cards and numbers), the
+  `postgres-saas` test record, and the `conduit` real-app log.
+- Test suite including a **trap suite** that proves the gate rejects wrong patches on SQLite and real Postgres.
 
 ### Known limitations
 

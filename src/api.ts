@@ -6,6 +6,7 @@ import { openConn, parseTarget, type DbTarget } from './db/conn.js';
 import { makeShadows } from './db/shadow.js';
 import { analyze, type ScanReport } from './scan/analyze.js';
 import { readTrace } from './trace/read.js';
+import { EXIT } from './meta.js';
 import { verify, type VerifyOptions, type VerifyResult } from './verify/verify.js';
 
 export class UsageError extends Error {}
@@ -89,14 +90,14 @@ export async function runScan(o: ScanOptions): Promise<ScanOutcome> {
   const trace = readTrace(dir);
   if (!trace.hooks.length) {
     return {
-      exitCode: 4,
+      exitCode: EXIT.UNVERIFIABLE,
       dir,
       error:
         '0 queries captured: the capture hook never loaded in the app process.\nThe app may run through a bundler or a wrapper that drops NODE_OPTIONS, or SQL_ANYTHING_DISABLE=1 is set. Supported: pg, better-sqlite3, node:sqlite (Prisma 7 and Drizzle through pg).',
     };
   }
   if (!trace.records.length) {
-    return { exitCode: 4, dir, error: 'the hook loaded but 0 queries were captured. Did the app run any SQL during the capture window? Use --hit <url> or a longer --duration.' };
+    return { exitCode: EXIT.UNVERIFIABLE, dir, error: 'the hook loaded but 0 queries were captured. Did the app run any SQL during the capture window? Use --hit <url> or a longer --duration.' };
   }
   let shadows: Awaited<ReturnType<typeof makeShadows>> | null = null;
   let conn: Awaited<ReturnType<typeof openConn>> | null = null;
@@ -114,7 +115,7 @@ export async function runScan(o: ScanOptions): Promise<ScanOutcome> {
     const report = await analyze(trace.records, trace.hooks.length, { shadow: conn, explainTop: o.explainTop, nPlusOneMin: o.nPlusOneMin });
     report.warnings.unshift(...warnings);
     fs.writeFileSync(path.join(dir, 'findings.json'), JSON.stringify(report, null, 2));
-    return { exitCode: 0, dir, report };
+    return { exitCode: EXIT.OK, dir, report };
   } finally {
     await conn?.close();
     await shadows?.dispose();
