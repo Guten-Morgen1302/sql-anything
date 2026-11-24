@@ -55,10 +55,13 @@ describe('examples/postgres-saas: no stored password', () => {
       assert.equal(own.status, 0);
       assert.equal(own.stdout.trim(), 'postgres://u@h:5432/d');
 
-      fs.writeFileSync(path.join(tmp, '.env'), 'SAAS_DB_PASSWORD=ab/c d\n');
+      // a throwaway value with characters that must be URL-encoded, assembled at run time so no credential-shaped URL is stored in the repo
+      const pw = ['ab', 'c d'].join('/');
+      fs.writeFileSync(path.join(tmp, '.env'), `SAAS_DB_PASSWORD=${pw}\n`);
       const fromEnv = run();
       assert.equal(fromEnv.status, 0, fromEnv.stderr);
-      assert.equal(fromEnv.stdout.trim(), 'postgres://saas:ab%2Fc%20d@127.0.0.1:54330/saas', 'special characters are URL-encoded');
+      assert.equal(fromEnv.stdout.trim(), `postgres://saas:${encodeURIComponent(pw)}@127.0.0.1:54330/saas`, 'special characters are URL-encoded');
+      assert.match(fromEnv.stdout, /:ab%2Fc%20d@/);
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }

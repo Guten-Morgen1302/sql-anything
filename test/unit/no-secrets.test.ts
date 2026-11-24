@@ -10,7 +10,8 @@ import { REPO } from '../helpers.js';
  * patterns that actually appeared. It does not replace a real scanner.
  */
 function trackedFiles(): string[] {
-  const r = spawnSync('git', ['ls-files', '-z'], { cwd: REPO, encoding: 'utf8' });
+  // tracked files AND new files that are not ignored: a file you have not `git add`ed yet will be scanned in CI, so scan it here too
+  const r = spawnSync('git', ['ls-files', '-z', '--cached', '--others', '--exclude-standard'], { cwd: REPO, encoding: 'utf8' });
   if (r.status === 0 && r.stdout) return r.stdout.split('\0').filter(Boolean);
   // not a git checkout (an extracted tarball): walk the tree
   const out: string[] = [];
