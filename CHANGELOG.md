@@ -3,7 +3,7 @@
 All notable changes to this project are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and the project aims to follow [Semantic Versioning](https://semver.org/) once 1.0 is released.
 
-## [0.1.0] - Unreleased
+## [0.1.0] - 2026-11-24
 
 First release.
 
@@ -45,9 +45,10 @@ First release.
 - Node.js only; Prisma 6 and earlier (native engine), bundled or serverless apps that drop `NODE_OPTIONS`, and other languages are not captured.
 - Postgres and SQLite only.
 - Verification is evidence, not proof: captured inputs, one data snapshot, a cloned database.
-- Tested on Windows with Node 24. CI (Ubuntu, Node 22 and 24, Postgres 16) is configured but had not run at the time of writing.
+- Developed and tested on Windows with Node 24. CI runs on Ubuntu with Node 22 and 24 against Postgres 16 (152 tests per job).
   macOS, Postgres below 15 and remote databases are untested.
-- `examples/postgres-saas/docker-compose.yml` has not been run; the example is tested against an embedded Postgres.
+- `examples/postgres-saas/docker-compose.yml` and `setup.mjs` have not been run against Docker; they are syntax-checked and the example is
+  tested against an embedded Postgres.
 - On the one real application tried (a RealWorld reference app on Sequelize), no fix passed the gate; see `docs/benchmarks/conduit/RESULTS.md`.
 
 [0.1.0]: https://github.com/Guten-Morgen1302/sql-anything/releases/tag/v0.1.0

@@ -212,14 +212,22 @@ describe('README numbers come from benchmark artifacts', () => {
     assert.deepEqual(missing, [], `README quotes counts that no benchmark artifact contains: ${missing.join(' ')}`);
   });
 
-  it('the hero card exists, is the artifact the caption describes, and every card is referenced from a RESULTS.md', () => {
-    const heroUrl = [...README.matchAll(/!\[[^\]]*\]\(([^)\s]+\.svg)\)/g)].map((m) => m[1]).find((u) => !BADGE.test(u));
-    assert.ok(heroUrl, 'README has no benchmark card image');
-    const hero = RAW.exec(heroUrl!)?.[1];
-    assert.ok(hero, `the hero image must be a raw.githubusercontent.com URL of this repo: ${heroUrl}`);
-    const svg = read(hero!);
-    assert.match(svg, /replayed · row parity/);
-    assert.ok(README.includes(svg.match(/(\d+\/\d+) replayed · row parity/)![0]), 'the hero caption must quote the card badge verbatim');
+  it('every card shown in the README exists, and the README quotes that card\'s own badge verbatim (and its speedup as rendered on the card)', () => {
+    const cardUrls = [...README.matchAll(/!\[[^\]]*\]\(([^)\s]+\.svg)\)/g)].map((m) => m[1]).filter((u) => !BADGE.test(u));
+    assert.ok(new Set(cardUrls).size >= 2, 'README should show two DIFFERENT verified cards near the top');
+    let rowParityCards = 0;
+    for (const url of cardUrls) {
+      const file = RAW.exec(url)?.[1];
+      assert.ok(file, `a card must be a raw.githubusercontent.com URL of this repo: ${url}`);
+      const text = read(file!).replace(/<[^>]+>/g, '\n').replace(/&gt;/g, '>').replace(/&lt;/g, '<');
+      const badge = /(\d+\/\d+) (replayed|runs) · (row|output) parity/.exec(text)?.[0];
+      assert.ok(badge, `${file} has no "N/N ... parity" badge`);
+      assert.ok(README.includes(badge!), `the README must quote the badge of ${file} verbatim: "${badge}"`);
+      const rendered = /(\d+(?:\.\d+)?)×/.exec(text)?.[1];
+      assert.ok(rendered && README.includes(`${rendered}x`), `the README must quote the speedup printed on ${file} (${rendered}x)`);
+      if (/replayed · row parity/.test(badge!)) rowParityCards++;
+    }
+    assert.ok(rowParityCards >= 1, 'at least one shown card must be a query-level "replayed · row parity" card');
     const mdFiles = artifactFiles.filter((x) => x.endsWith('.md'));
     for (const f of fs.readdirSync(path.join(REPO, 'docs', 'assets')).filter((x) => x.endsWith('.svg'))) {
       assert.ok(mdFiles.some((r) => fs.readFileSync(r, 'utf8').includes(f)), `docs/assets/${f} is not referenced by any docs/benchmarks/**/RESULTS.md`);

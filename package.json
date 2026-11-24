@@ -1,6 +1,6 @@
 {
   "name": "sql-anything",
-  "version": "0.1.0-dev",
+  "version": "0.1.0",
   "description": "Find the slow 5% of your SQL, let an agent fix it, and replay-verify the fix before you trust it. N+1, missing indexes, seq scans. pg, SQLite, Prisma 7, Drizzle, Knex, Sequelize.",
   "license": "MIT",
   "type": "module",
