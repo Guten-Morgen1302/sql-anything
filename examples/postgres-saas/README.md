@@ -6,7 +6,7 @@ is staged.** It shows the loop; it is not a benchmark of your app.
 ```bash
 cd examples/postgres-saas
 npm install
-npm run setup          # random local password into .env, docker compose up -d --wait, then seed (about 640k rows: 120k tasks, 200k comments, ...)
+npm run setup          # random local password into .env, docker compose up -d --wait, then seed (324,020 rows: 120,000 tasks, 200,000 comments, 2,000 users, 2,000 projects, 20 tenants)
 PORT=3000 npm start    # the API
 ```
 
@@ -31,5 +31,6 @@ npx sql-anything go --db "$(node db.mjs)" --agent claude \
 
 The repository's test suite seeds this example at 1/10 scale into a real Postgres and asserts that scan reports all three
 bottlenecks (the N+1 with its `file:line`, the correlated subquery, the unindexed join) and that the N+1's count query gets a
-verified composite index. The `docker-compose.yml` and `setup.mjs` themselves have not been run (Docker was not available when they were
-written) and are not exercised by CI.
+verified composite index. The one-command setup, the compose file and a `go` run against them were run once by hand on Docker Desktop
+(Windows, Docker 29.3.1): [docs/benchmarks/postgres-saas/RESULTS.md](../../docs/benchmarks/postgres-saas/RESULTS.md). The compose path is not
+exercised by CI, and Linux and macOS Docker are untested.

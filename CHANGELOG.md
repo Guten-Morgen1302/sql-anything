@@ -45,10 +45,11 @@ First release.
 - Node.js only; Prisma 6 and earlier (native engine), bundled or serverless apps that drop `NODE_OPTIONS`, and other languages are not captured.
 - Postgres and SQLite only.
 - Verification is evidence, not proof: captured inputs, one data snapshot, a cloned database.
-- Developed and tested on Windows with Node 24. CI runs on Ubuntu with Node 22 and 24 against Postgres 16 (152 tests per job).
+- Developed and tested on Windows with Node 24. CI runs on Ubuntu with Node 22 and 24 against Postgres 16 (163 tests per job).
   macOS, Postgres below 15 and remote databases are untested.
-- `examples/postgres-saas/docker-compose.yml` and `setup.mjs` have not been run against Docker; they are syntax-checked and the example is
-  tested against an embedded Postgres.
+- `examples/postgres-saas` setup, compose file and a `go` run were run once by hand on Docker Desktop for Windows (see
+  `docs/benchmarks/postgres-saas/RESULTS.md`). They are not exercised by CI (the example is tested against an embedded Postgres), and Linux
+  and macOS Docker are untested.
 - On the one real application tried (a RealWorld reference app on Sequelize), no fix passed the gate; see `docs/benchmarks/conduit/RESULTS.md`.
 
 [0.1.0]: https://github.com/Guten-Morgen1302/sql-anything/releases/tag/v0.1.0

@@ -78,7 +78,7 @@ Synthetic data, staged slowness. They show the loop, not a benchmark of your app
 | Example | One command | What you get |
 |---|---|---|
 | [`examples/sqlite-shop`](examples/sqlite-shop) (zero Docker) | `npx sql-anything demo` | A live run with the real `claude` CLI: index **13.93x** (123/123 replayed · row parity); the N+1 rewritten by `claude` **17.95x**, 41 to 2 statements per request (15/15 runs · output parity). [Numbers](docs/benchmarks/sqlite-shop/RESULTS.md) |
-| [`examples/postgres-saas`](examples/postgres-saas) (Docker Compose, 100k+ rows) | `cd examples/postgres-saas && npm install && npm run setup` | An N+1 driver loop, an unindexed three-table join and a correlated subquery. The test suite seeds it at 1/10 scale into Postgres and asserts all three are found and the N+1's count query gets a verified composite index (3.3x when recorded). The compose file itself has not been run |
+| [`examples/postgres-saas`](examples/postgres-saas) (Docker Compose, 100k+ rows) | `cd examples/postgres-saas && npm install && npm run setup` | An N+1 driver loop, an unindexed three-table join and a correlated subquery. Run once on real Docker Compose at full scale (324,020 rows, `--agent none`): `scan` found all three; the N+1's count query got a generated composite index, **6.30x** (98/98 replayed · row parity); the correlated subquery stayed unverifiable (20 of the 30 timing samples needed). The loop itself remains. The test suite repeats the scan at 1/10 scale on every push. [Numbers](docs/benchmarks/postgres-saas/RESULTS.md) |
 
 ## Proof, not vibes: how the gate works
 
